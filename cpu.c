@@ -1,4 +1,6 @@
 #include "cpu.h"
+#include "memory.h"
+#include <SDL3/SDL_events.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -284,11 +286,11 @@ instruction instructions[256] = {
     (instruction){ISC, ABSOLUTE_X, 7}       // 0xff - unofficial
 };
 
-void set_cpu_flag(cpu *c, int bool, status_flag flag) {
-    if(bool)
-        c->processor_status_register |= (uint8_t)(bool << flag);
+void set_cpu_flag(cpu *c, int expr, status_flag flag) {
+    if(expr)
+        c->processor_status_register |= (uint8_t)(expr << flag);
     else
-        c->processor_status_register &= ~(uint8_t)(bool << flag);
+        c->processor_status_register &= ~(uint8_t)(expr << flag);
 }
 
 uint8_t get_cpu_flag(cpu *c, status_flag flag) {
@@ -308,33 +310,33 @@ int8_t check_boundary_crossed(uint16_t a, uint16_t b) {
     return page_one != page_two;
 }
 
-void branch(cpu *c, uint16_t data, int bool) {
-    if(bool)
-        c->pc += 2 + c->memory[data];
+void branch(cpu *c, uint16_t data, int expr) {
+    if(expr)
+        c->pc += 2 + c->memory.memory[data];
 }
 
 uint16_t get_address(cpu *c, address_mode a, int *num_cycles) {
     uint16_t data = 0;
     switch(a) {
         case ABSOLUTE:
-            data = c->memory[c->pc + 1];
+            data = c->memory.memory[c->pc + 1];
             data = data << 8;
-            data |= c->memory[c->pc];
+            data |= c->memory.memory[c->pc];
             c->pc += 3;
             break;
         case ABSOLUTE_X:
-            data = c->memory[c->pc + 1];
+            data = c->memory.memory[c->pc + 1];
             data = data << 8;
-            data |= c->memory[c->pc];
+            data |= c->memory.memory[c->pc];
             if(check_boundary_crossed(data, add_wrapping(data, c->x)))
                 *num_cycles += 1;
             data += c->x;
             c->pc += 3;
             break;
         case ABSOLUTE_Y:
-            data = c->memory[c->pc + 1];
+            data = c->memory.memory[c->pc + 1];
             data = data << 8;
-            data |= c->memory[c->pc];
+            data |= c->memory.memory[c->pc];
             if(check_boundary_crossed(data, add_wrapping(data, c->y)))
                 *num_cycles += 1;
             data += c->y;
@@ -345,44 +347,44 @@ uint16_t get_address(cpu *c, address_mode a, int *num_cycles) {
             c->pc ++;
             break;
         case RELATIVE:
-            data = c->pc + (int8_t)c->memory[c->pc+1];
+            data = c->pc + (int8_t)c->memory.memory[c->pc+1];
             c->pc += 2;
             break;
         case INDIRECT:
-            data = c->memory[c->pc+1];
+            data = c->memory.memory[c->pc+1];
             data = data << 8;
-            data |= c->memory[c->pc];
+            data |= c->memory.memory[c->pc];
             c->pc += 2;
 
-            data = (c->memory[(data & 0xFF00) | ((data + 1) & 0x00FF)] << 8) | c->memory[data];
+            data = (c->memory.memory[(data & 0xFF00) | ((data + 1) & 0x00FF)] << 8) | c->memory.memory[data];
             break;
         case INDIRECT_X:
-            data = (c->memory[(((c->memory[c->pc+1] + c->x) & 0xFF) + 1) & 0xFF] << 8) | c->memory[((c->memory[c->pc+1] + c->x) & 0xFF)];
+            data = (c->memory.memory[(((c->memory.memory[c->pc+1] + c->x) & 0xFF) + 1) & 0xFF] << 8) | c->memory.memory[((c->memory.memory[c->pc+1] + c->x) & 0xFF)];
             c->pc += 2;
             break;
         case INDIRECT_Y:
-            data = (c->memory[(((c->memory[c->pc+1]) & 0xFF) + 1) & 0xFF] << 8) | c->memory[((c->memory[c->pc+1]) & 0xFF)] + c->y;
+            data = (c->memory.memory[(((c->memory.memory[c->pc+1]) & 0xFF) + 1) & 0xFF] << 8) | c->memory.memory[((c->memory.memory[c->pc+1]) & 0xFF)] + c->y;
             if(check_boundary_crossed(data, add_wrapping(data, c->y)))
                 *num_cycles += 1;
             c->pc += 2;
             break;
         case IMMEDIATE:
-            data = c->memory[c->pc+1];
+            data = c->memory.memory[c->pc+1];
             c->pc += 2;
             break;
         case IMPLICIT:
             c->pc++;
             break;
         case ZERO_PAGE:
-            data = c->memory[c->pc+1];
+            data = c->memory.memory[c->pc+1];
             c->pc +=2;
             break;
         case ZERO_PAGE_X:
-            data = (c->memory[c->pc++] + c->x) & 0xff;
+            data = (c->memory.memory[c->pc++] + c->x) & 0xff;
             c->pc +=2;
             break;
         case ZERO_PAGE_Y:
-            data = (c->memory[c->pc++] + c->y) & 0xff;
+            data = (c->memory.memory[c->pc++] + c->y) & 0xff;
             c->pc +=2;
             break;
     }
@@ -440,7 +442,7 @@ int load_rom(uint8_t memory[MEMORY_SIZE]) {
     rewind(rom);
 
     if(rom_size > (MEMORY_SIZE - ROM_START)) {
-        fprintf(stderr, "ROM too large to fit in memory");
+        fprintf(stderr, "ROM too large to fit in memory.memory");
         fclose(rom);
         return 0;
     }
@@ -459,28 +461,28 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
     switch(instr) {
         //Load/Store operations:
         case LDA:
-            c->accumulator = c->memory[data];
+            c->accumulator = c->memory.memory[data];
             set_cpu_flag(c, c->accumulator == 0, ZERO);
             set_cpu_flag(c, (c->accumulator & 0x80) != 0, NEGATIVE);
             break;
         case LDX:
-            c->x = c->memory[data];
+            c->x = c->memory.memory[data];
             set_cpu_flag(c, c->x == 0, ZERO);
             set_cpu_flag(c, (c->x & 0x80) != 0, NEGATIVE);
             break;
         case LDY:
-            c->y = c->memory[data];
+            c->y = c->memory.memory[data];
             set_cpu_flag(c, c->y == 0, ZERO);
             set_cpu_flag(c, (c->y & 0x80) != 0, NEGATIVE);
             break;
         case STA:
-            c->memory[data] = c->accumulator;
+            c->memory.memory[data] = c->accumulator;
             break;
         case STX:
-            c->memory[data] = c->x;
+            c->memory.memory[data] = c->x;
             break;
         case STY:
-            c->memory[data] = c->y;
+            c->memory.memory[data] = c->y;
             break;
 
         //Register transfers
@@ -515,60 +517,60 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
             c->stack_pointer = c->x;
             break;
         case PHA:
-            c->memory[0x100 + c->stack_pointer] = c->accumulator;
+            c->memory.memory[0x100 + c->stack_pointer] = c->accumulator;
             c->stack_pointer--;
             break;
         case PHP:
-            c->memory[0x100 + c->stack_pointer] = c->processor_status_register;
+            c->memory.memory[0x100 + c->stack_pointer] = c->processor_status_register;
             c->stack_pointer--;
             break;
         case PLA:
             c->stack_pointer++;
-            c->accumulator = c->memory[0x100 + c->stack_pointer];
+            c->accumulator = c->memory.memory[0x100 + c->stack_pointer];
             set_cpu_flag(c, c->accumulator == 0, ZERO);
             set_cpu_flag(c, (c->accumulator & 0x80) != 0, NEGATIVE);
             break;
         case PLP:
             c->stack_pointer++;
-            c->processor_status_register = c->memory[0x100 + c->stack_pointer];
+            c->processor_status_register = c->memory.memory[0x100 + c->stack_pointer];
             break;
 
         //Logical:
         case AND:
-            c->accumulator &= c->memory[data];
+            c->accumulator &= c->memory.memory[data];
             set_cpu_flag(c, c->accumulator == 0, ZERO);
             set_cpu_flag(c, (c->accumulator & 0x80) != 0, NEGATIVE);
             break;
         case XOR:
-            c->accumulator ^= c->memory[data];
+            c->accumulator ^= c->memory.memory[data];
             set_cpu_flag(c, c->accumulator == 0, ZERO);
             set_cpu_flag(c, (c->accumulator & 0x80) != 0, NEGATIVE);
             break;
         case ORA:
-            c->accumulator |= c->memory[data];
+            c->accumulator |= c->memory.memory[data];
             set_cpu_flag(c, c->accumulator == 0, ZERO);
             set_cpu_flag(c, (c->accumulator & 0x80) != 0, NEGATIVE);
             break;
         case BIT:
-            set_cpu_flag(c, (c->accumulator & c->memory[data]) != 0, ZERO);
+            set_cpu_flag(c, (c->accumulator & c->memory.memory[data]) != 0, ZERO);
             set_cpu_flag(c, (c->accumulator & 0x40) != 0, OVERFLOW);
             set_cpu_flag(c, (c->accumulator & 0x80) != 0, NEGATIVE);
             break;
 
         //Arithmetic:
         case ADC:
-            opval = (c->accumulator + c->memory[data] + (c->processor_status_register & (1 << CARRY)));
-            c->accumulator += c->memory[data] + (c->processor_status_register & (1 << CARRY));
+            opval = (c->accumulator + c->memory.memory[data] + (c->processor_status_register & (1 << CARRY)));
+            c->accumulator += c->memory.memory[data] + (c->processor_status_register & (1 << CARRY));
             set_cpu_flag(c, opval > 0xFF, CARRY);
             set_cpu_flag(c, opval == 0, ZERO);
-            set_cpu_flag(c, ((!(c->accumulator ^ c->memory[data]) & (c->accumulator ^ opval)) & 0x80) != 0, OVERFLOW);
+            set_cpu_flag(c, ((!(c->accumulator ^ c->memory.memory[data]) & (c->accumulator ^ opval)) & 0x80) != 0, OVERFLOW);
             set_cpu_flag(c, (opval & 0x80) != 0, NEGATIVE);
             break;
         case SBC:
-            opval = (c->accumulator - c->memory[data] - !get_cpu_flag(c, CARRY));
+            opval = (c->accumulator - c->memory.memory[data] - !get_cpu_flag(c, CARRY));
             set_cpu_flag(c, ~(opval < 0x00), CARRY);
             set_cpu_flag(c, opval == 0, ZERO);
-            set_cpu_flag(c, ((!(c->accumulator ^ c->memory[data]) & (c->accumulator ^ opval)) & 0x80) != 0, OVERFLOW);
+            set_cpu_flag(c, ((!(c->accumulator ^ c->memory.memory[data]) & (c->accumulator ^ opval)) & 0x80) != 0, OVERFLOW);
             set_cpu_flag(c, (opval & 0x80) != 0, NEGATIVE);
 
             c->accumulator = opval;
@@ -576,9 +578,9 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
 
         //Increments and decrements:
         case INC:
-            c->memory[data]++;
-            set_cpu_flag(c, c->memory[data] == 0, ZERO);
-            set_cpu_flag(c, (c->memory[data] & 0x80) != 0, NEGATIVE);
+            c->memory.memory[data]++;
+            set_cpu_flag(c, c->memory.memory[data] == 0, ZERO);
+            set_cpu_flag(c, (c->memory.memory[data] & 0x80) != 0, NEGATIVE);
             break;
         case INX:
             c->x++;
@@ -591,9 +593,9 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
             set_cpu_flag(c, (c->y & 0x80) != 0, NEGATIVE);
             break;
         case DEC:
-            c->memory[data]--;
-            set_cpu_flag(c, c->memory[data] == 0, ZERO);
-            set_cpu_flag(c, (c->memory[data] & 0x80) != 0, NEGATIVE);
+            c->memory.memory[data]--;
+            set_cpu_flag(c, c->memory.memory[data] == 0, ZERO);
+            set_cpu_flag(c, (c->memory.memory[data] & 0x80) != 0, NEGATIVE);
             break;
         case DEX:
             c->x--;
@@ -608,19 +610,19 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
 
         //Comparisons:
         case CMP:
-            opval = c->accumulator - c->memory[data];
+            opval = c->accumulator - c->memory.memory[data];
             set_cpu_flag(c, (opval < 0), CARRY);
             set_cpu_flag(c, opval == 0, ZERO);
             set_cpu_flag(c, (opval & 0x80) != 0, NEGATIVE);
             break;
         case CPX:
-            opval = c->x - c->memory[data];
+            opval = c->x - c->memory.memory[data];
             set_cpu_flag(c, (opval < 0), CARRY);
             set_cpu_flag(c, opval == 0, ZERO);
             set_cpu_flag(c, (opval & 0x80) != 0, NEGATIVE);
             break;
         case CPY:
-            opval = c->y - c->memory[data];
+            opval = c->y - c->memory.memory[data];
             set_cpu_flag(c, (opval < 0), CARRY);
             set_cpu_flag(c, opval == 0, ZERO);
             set_cpu_flag(c, (opval & 0x80) != 0, NEGATIVE);
@@ -631,34 +633,34 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
             if(i.addr == ACCUMULATOR)
                 opval = c->accumulator << 1;
             else
-                opval = c->memory[data] << 1;
+                opval = c->memory.memory[data] << 1;
             set_cpu_flag(c, (c->accumulator & 0x80), CARRY);
             set_cpu_flag(c, opval == 0, ZERO);
             set_cpu_flag(c, (opval & 0x80) != 0, NEGATIVE);
             if(i.addr == ACCUMULATOR)
                 c->accumulator = opval;
             else
-                c->memory[data] = opval;
+                c->memory.memory[data] = opval;
             break;
         case LSR:
             if(i.addr == ACCUMULATOR)
                 opval = c->accumulator >> 1;
             else
-                opval = c->memory[data] >> 1;
+                opval = c->memory.memory[data] >> 1;
             set_cpu_flag(c, (c->accumulator & 0x01), CARRY);
             set_cpu_flag(c, opval == 0, ZERO);
             set_cpu_flag(c, 0, NEGATIVE);
             if(i.addr == ACCUMULATOR)
                 c->accumulator = opval;
             else
-                c->memory[data] = opval;
+                c->memory.memory[data] = opval;
             break;
         //Need to finish off these two below:
         case ROL:
             if(i.addr == ACCUMULATOR)
                 opval = c->accumulator << 1;
             else
-                opval = c->memory[data] << 1;
+                opval = c->memory.memory[data] << 1;
 
             //Need to make the lsb bit the carry bit
             if(get_cpu_flag(c, CARRY))
@@ -671,13 +673,13 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
             if(i.addr == ACCUMULATOR)
                 c->accumulator = opval;
             else
-                c->memory[data] = opval;
+                c->memory.memory[data] = opval;
             break;
         case ROR:
             if(i.addr == ACCUMULATOR)
                 opval = c->accumulator >> 1;
             else
-                opval = c->memory[data] >> 1;
+                opval = c->memory.memory[data] >> 1;
 
             //Need to make the msb the carry bit
             if(get_cpu_flag(c, CARRY))
@@ -690,20 +692,20 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
             if(i.addr == ACCUMULATOR)
                 c->accumulator = opval;
             else
-                c->memory[data] = opval;
+                c->memory.memory[data] = opval;
             break;
 
         //Jumps and Calls:
         case JMP:
-            c->pc = c->memory[data];
+            c->pc = c->memory.memory[data];
             break;
         case JSR:
-            c->memory[0x100 + c->stack_pointer] = c->pc+2;
+            c->memory.memory[0x100 + c->stack_pointer] = c->pc+2;
             c->stack_pointer--;
-            c->pc = c->memory[data];
+            c->pc = c->memory.memory[data];
             break;
         case RTS:
-            c->pc = c->memory[0x100 + c->stack_pointer];
+            c->pc = c->memory.memory[0x100 + c->stack_pointer];
             c->stack_pointer++;
             c->pc++;
             break;
@@ -759,9 +761,9 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
 
         //System functions:
         case BRK:
-            c->memory[0x100 + c->stack_pointer] = c->pc+2;
+            c->memory.memory[0x100 + c->stack_pointer] = c->pc+2;
             c->stack_pointer--;
-            c->memory[0x100 + c->stack_pointer] = c->processor_status_register;
+            c->memory.memory[0x100 + c->stack_pointer] = c->processor_status_register;
             c->stack_pointer--;
             c->pc = 0xFFFE;
             set_cpu_flag(c, 1, INTERRPUT_DISABLE);
@@ -769,9 +771,9 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
         case NOP:
             break;
         case RTI:
-            c->processor_status_register = c->memory[0x100 + c->stack_pointer];
+            c->processor_status_register = c->memory.memory[0x100 + c->stack_pointer];
             c->stack_pointer++;
-            c->pc = c->memory[0x100 + c->stack_pointer];
+            c->pc = c->memory.memory[0x100 + c->stack_pointer];
             c->stack_pointer++;
             break;
 
@@ -781,21 +783,21 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
             if(i.addr == ACCUMULATOR)
                 opval = c->accumulator << 1;
             else
-                opval = c->memory[data] << 1;
+                opval = c->memory.memory[data] << 1;
             set_cpu_flag(c, (c->accumulator & 0x80), CARRY);
             set_cpu_flag(c, opval == 0, ZERO);
             set_cpu_flag(c, (opval & 0x80) != 0, NEGATIVE);
             if(i.addr == ACCUMULATOR)
                 c->accumulator = opval;
             else
-                c->memory[data] = opval;
+                c->memory.memory[data] = opval;
             //ORA
-            c->accumulator |= c->memory[data];
+            c->accumulator |= c->memory.memory[data];
             set_cpu_flag(c, c->accumulator == 0, ZERO);
             set_cpu_flag(c, (c->accumulator & 0x80) != 0, NEGATIVE);
             break;
         case ANC:
-            c->accumulator &= c->memory[data];
+            c->accumulator &= c->memory.memory[data];
             set_cpu_flag(c, c->accumulator == 0, ZERO);
             set_cpu_flag(c, (c->accumulator & 0x80) != 0, NEGATIVE);
             set_cpu_flag(c, (c->accumulator & 0x80), CARRY);
@@ -805,7 +807,7 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
             if(i.addr == ACCUMULATOR)
                 opval = c->accumulator << 1;
             else
-                opval = c->memory[data] << 1;
+                opval = c->memory.memory[data] << 1;
 
             //Need to make the lsb bit the carry bit
             if(get_cpu_flag(c, CARRY))
@@ -818,9 +820,9 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
             if(i.addr == ACCUMULATOR)
                 c->accumulator = opval;
             else
-                c->memory[data] = opval;
+                c->memory.memory[data] = opval;
             //AND
-            c->accumulator &= c->memory[data];
+            c->accumulator &= c->memory.memory[data];
             set_cpu_flag(c, c->accumulator == 0, ZERO);
             set_cpu_flag(c, (c->accumulator & 0x80) != 0, NEGATIVE);
             break;
@@ -829,22 +831,22 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
             if(i.addr == ACCUMULATOR)
                 opval = c->accumulator >> 1;
             else
-                opval = c->memory[data] >> 1;
+                opval = c->memory.memory[data] >> 1;
             set_cpu_flag(c, (c->accumulator & 0x01), CARRY);
             set_cpu_flag(c, opval == 0, ZERO);
             set_cpu_flag(c, 0, NEGATIVE);
             if(i.addr == ACCUMULATOR)
                 c->accumulator = opval;
             else
-                c->memory[data] = opval;
+                c->memory.memory[data] = opval;
             //XOR
-            c->accumulator ^= c->memory[data];
+            c->accumulator ^= c->memory.memory[data];
             set_cpu_flag(c, c->accumulator == 0, ZERO);
             set_cpu_flag(c, (c->accumulator & 0x80) != 0, NEGATIVE);
             break;
         case ALR: //And then left shift
             //And
-            c->accumulator &= c->memory[data];
+            c->accumulator &= c->memory.memory[data];
             set_cpu_flag(c, c->accumulator == 0, ZERO);
             set_cpu_flag(c, (c->accumulator & 0x80) != 0, NEGATIVE);
 
@@ -856,7 +858,7 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
             c->accumulator = opval;
             break;
         case ARR: //AND #i then ROR acc
-            c->accumulator &= c->memory[data];
+            c->accumulator &= c->memory.memory[data];
 
             opval = c->accumulator >> 1;
 
@@ -876,7 +878,7 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
             if(i.addr == ACCUMULATOR)
                 opval = c->accumulator >> 1;
             else
-                opval = c->memory[data] >> 1;
+                opval = c->memory.memory[data] >> 1;
 
             //Need to make the msb the carry bit
             if(get_cpu_flag(c, CARRY))
@@ -889,18 +891,18 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
             if(i.addr == ACCUMULATOR)
                 c->accumulator = opval;
             else
-                c->memory[data] = opval;
+                c->memory.memory[data] = opval;
 
             //ADC:
-            opval = (c->accumulator + c->memory[data] + get_cpu_flag(c, CARRY));
-            c->accumulator += c->memory[data] + (c->processor_status_register & (1 << CARRY));
+            opval = (c->accumulator + c->memory.memory[data] + get_cpu_flag(c, CARRY));
+            c->accumulator += c->memory.memory[data] + (c->processor_status_register & (1 << CARRY));
             set_cpu_flag(c, opval > 0xFF, CARRY);
             set_cpu_flag(c, opval == 0, ZERO);
-            set_cpu_flag(c, ((!(c->accumulator ^ c->memory[data]) & (c->accumulator ^ opval)) & 0x80) != 0, OVERFLOW);
+            set_cpu_flag(c, ((!(c->accumulator ^ c->memory.memory[data]) & (c->accumulator ^ opval)) & 0x80) != 0, OVERFLOW);
             set_cpu_flag(c, (opval & 0x80) != 0, NEGATIVE);
             break;
         case SAX:
-            c->memory[data] = c->accumulator & c->x;
+            c->memory.memory[data] = c->accumulator & c->x;
             break;
         case XAA:
             fprintf(stderr, "XAA is not a supported opcode\n");
@@ -913,7 +915,7 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
             break;
         case LAX: //Shortcut for LDA then TAX
             //LDA
-            c->accumulator = c->memory[data];
+            c->accumulator = c->memory.memory[data];
             //TAX
             c->x = c->accumulator;
             set_cpu_flag(c, c->x == 0, ZERO);
@@ -924,45 +926,47 @@ void execute(cpu *c, uint8_t instr, int *num_cycles) {
             break;
         case DCP: //Shortcut for DEC then CMP
             //DEC
-            c->memory[data]--;
+            c->memory.memory[data]--;
 
             //CMP
-            opval = c->accumulator - c->memory[data];
+            opval = c->accumulator - c->memory.memory[data];
             set_cpu_flag(c, (opval < 0), CARRY);
             set_cpu_flag(c, opval == 0, ZERO);
             set_cpu_flag(c, (opval & 0x80) != 0, NEGATIVE);
             break;
         case AXS:
-            c->x = (c->x & c->accumulator) - c->memory[data];
+            c->x = (c->x & c->accumulator) - c->memory.memory[data];
             set_cpu_flag(c, (c->accumulator & 0x80), CARRY);
             set_cpu_flag(c, c->x == 0, ZERO);
             set_cpu_flag(c, (c->x & 0x80) != 0, NEGATIVE);
             break;
         case ISC: //Shortcut for INC then SBC
             //INC
-            c->memory[data]++;
+            c->memory.memory[data]++;
             //SBC
-            opval = (c->accumulator - c->memory[data] - !get_cpu_flag(c, CARRY));
+            opval = (c->accumulator - c->memory.memory[data] - !get_cpu_flag(c, CARRY));
             set_cpu_flag(c, ~(opval < 0x00), CARRY);
             set_cpu_flag(c, opval == 0, ZERO);
-            set_cpu_flag(c, ((!(c->accumulator ^ c->memory[data]) & (c->accumulator ^ opval)) & 0x80) != 0, OVERFLOW);
+            set_cpu_flag(c, ((!(c->accumulator ^ c->memory.memory[data]) & (c->accumulator ^ opval)) & 0x80) != 0, OVERFLOW);
             set_cpu_flag(c, (opval & 0x80) != 0, NEGATIVE);
 
             c->accumulator = opval;
             break;
         case STP:
-            fprintf(stderr, "STP is not a supported opcode\n");
+            // fprintf(stderr, "STP is not a supported opcode\n");
+            printf("Stopping Program\n");
+            SDL_PushEvent(&(SDL_Event){SDL_EVENT_QUIT});
             break;
         case SHX:
-            c->memory[data] = ((uint8_t)((data & 0xff00) >> 8) + 1) & c->x;
+            c->memory.memory[data] = ((uint8_t)((data & 0xff00) >> 8) + 1) & c->x;
             break;
         case SHY:
-            c->memory[data] = ((uint8_t)((data & 0xff00) >> 8) + 1) & c->y;
+            c->memory.memory[data] = ((uint8_t)((data & 0xff00) >> 8) + 1) & c->y;
             break;
     }
 }
 
-int init(cpu *c) {
+int cpu_init(cpu *c) {
     c->accumulator = 0;
     c->x = 0;
     c->y = 0;
@@ -973,30 +977,48 @@ int init(cpu *c) {
     return 1;
 }
 
-int load(cpu *c) {
-    load_rom((uint8_t *)c->memory);
+int cpu_load(cpu *c) {
+    load_rom((uint8_t *)c->memory.memory);
     return 1;
 }
 
-int main(int argc, char **argv) {
-    cpu c;
-    if(!init(&c)) {
-        return 1;
-    }
-    else {
-        if(!load(&c)) {
-            return 1;
-        }
-        else {
-            int cpu_cycle_count = 0;
-            while(c.pc != 0x900) {
-                if(cpu_cycle_count == 0) {
-                    execute(&c, c.memory[c.pc], &cpu_cycle_count);
-                }
-                cpu_cycle_count--;
-            }
-        }
-        printf("Results: %u, %u\n", c.memory[0x02], c.memory[0x03]);
-    }
-    return 0;
+int on_NMI(cpu *c, ppu *p) {
+    c->memory.memory[0x100 + c->stack_pointer] = (uint8_t)(c->pc >> 8);
+    c->stack_pointer--;
+    c->memory.memory[0x100 + c->stack_pointer] = (uint8_t)(c->pc >> 0);
+    c->stack_pointer--;
+    c->memory.memory[0x100 + c->stack_pointer] = c->processor_status_register;
+    c->stack_pointer--;
+    set_cpu_flag(c, 1, INTERRPUT_DISABLE);
+
+    uint16_t new_pc ;
+
+    return 8;
 }
+
+// int main(int argc, char **argv) {
+//     cpu c;
+//     if(!cpu_init(&c)) {
+//         return 1;
+//     }
+//     else {
+//         if(!cpu_load(&c)) {
+//             return 1;
+//         }
+//         else {
+//             int cpu_cycle_count = 0;
+//             int cycle_count = 0;
+//             while(c.pc != 0x900) {
+//                 if(cycle_count % 3 == 0) {
+//                     if(cpu_cycle_count == 0) {
+//                         execute(&c, c.memory.memory[c.pc], &cpu_cycle_count);
+//                     }
+//                     cpu_cycle_count--;
+//                 }
+//                 cycle_count++;
+//             }
+//         }
+//         printf("Results: %u, %u\n", c.memory.memory[0x02], c.memory.memory[0x03]);
+//     }
+//     return 0;
+// }
