@@ -1,8 +1,8 @@
-//Logical operators
-//Mathematical operators
 #include <stdint.h>
 #include <stdio.h>
 
+//Logical operators
+//Mathematical operators
 #define MEMORY_SIZE 65536
 
 typedef struct {
