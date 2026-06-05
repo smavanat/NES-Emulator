@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,11 +9,15 @@
 // TODO: Make a simple parser to parse the assembly and write the equivalent bytes to the
 // output file
 
-#define stringify(op) #op
+#define num_instr 8
 
 size_t err_line = 0;
 size_t err_col = 0;
 char err_char = 0;
+
+//TODO: Make this into a hashmap
+char *instr[num_instr] = {"LDA", "LDX", "STA", "STX", "INX", "BNE", "BRK", "JMP"};
+uint8_t nparams[num_instr] = {1, 1, 0, 0, 0, 1, 0, 1};
 
 void write_text(char *text, size_t len) {
     FILE *fptr = fopen("output.txt", "w");
@@ -105,6 +110,10 @@ char *token_type_string(assembler_token_type type) {
     switch (type) {
         case assembler_opcode:
             return "OPCODE";
+        case assembler_opcode0:
+            return "OPCODE0";
+        case assembler_opcode1:
+            return "OPCODE1";
         case assembler_string:
             return "STRING";
         case assembler_binary:
@@ -193,6 +202,22 @@ uint8_t consume(char *buf, lexer *l, size_t *i, size_t *curr_col, size_t curr_li
         .len = curr_len,
     };
     memcpy(&tok.lexeme, &lex_buf, curr_len);
+
+    if(type == assembler_opcode) {
+        for(size_t j = 0; j < curr_len; j++) {
+            lex_buf[j] = toupper(lex_buf[j]);
+        }
+        lex_buf[curr_len] = '\0';
+
+        for(size_t j = 0; j < num_instr; j++) {
+            if(!strcmp(lex_buf, instr[j])) {
+                tok.type = nparams[j] == 0 ? assembler_opcode0 : assembler_opcode1;
+                break;
+            }
+        }
+
+        if(tok.type == assembler_opcode) tok.type = assembler_string;
+    }
     append_token(l, tok);
 
     return 1;
