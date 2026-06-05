@@ -3,9 +3,12 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include "cpu.h"
 
 // TODO: Make a simple parser to parse the assembly and write the equivalent bytes to the
 // output file
+
+#define stringify(op) #op
 
 size_t err_line = 0;
 size_t err_col = 0;
@@ -71,11 +74,15 @@ int read_to_end(char const *path, char **buf, uint8_t add_null) {
 }
 
 typedef enum {
-    assembler_string,
+    assembler_opcode,
+    assembler_opcode0,
+    assembler_opcode1,
     assembler_binary,
     assembler_hex,
     assembler_imm,
     assembler_nl,
+    assembler_dec,
+    assembler_string,
     assembler_none
 } assembler_token_type;
 
@@ -96,18 +103,22 @@ typedef struct {
 
 char *token_type_string(assembler_token_type type) {
     switch (type) {
+        case assembler_opcode:
+            return "OPCODE";
         case assembler_string:
-            return "STRING ";
+            return "STRING";
         case assembler_binary:
-            return "BINARY ";
+            return "BINARY";
         case assembler_hex:
-            return "HEX ";
+            return "HEX";
+        case assembler_dec:
+            return "DECIMAL";
         case assembler_imm:
-            return "IMM ";
+            return "IMM";
         case assembler_nl:
-            return "NEWLINE ";
+            return "NEWLINE";
         default:
-            return "NONE ";
+            return "NONE";
     }
 }
 
@@ -138,55 +149,95 @@ void append_token(lexer *l, assembler_token tok) {
     l->tokens[l->len++] = tok;
 }
 
+uint8_t is_char(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+uint8_t is_number(char c) {
+    return (c >= '0' && c <= '9');
+}
+
+uint8_t is_hex(char c) {
+    return (is_number(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
+}
+
+uint8_t is_string(char c) {
+    return is_number(c) && is_char(c);
+}
+
+uint8_t is_binary(char c) {
+    return (c == '0' || c == '1');
+}
+
+uint8_t consume(char *buf, lexer *l, size_t *i, size_t *curr_col, size_t curr_line, uint8_t (*disc)(char c), assembler_token_type type) {
+    char lex_buf[32];
+    size_t start_col = *curr_col;
+    size_t curr_len = 0;
+    while(disc(buf[*i])) {
+        lex_buf[curr_len] = buf[*i];
+        (*i)++;
+        (*curr_col)++;
+        curr_len++;
+    }
+    if(buf[(*i)] != ' ' && buf[(*i)] != '\n') {
+        err_col = start_col+curr_len;
+        err_line = curr_line;
+        err_char = buf[(*i)];
+        return 0;
+    }
+
+    assembler_token tok = {
+        .type = type,
+        .column = start_col,
+        .line = curr_line,
+        .len = curr_len,
+    };
+    memcpy(&tok.lexeme, &lex_buf, curr_len);
+    append_token(l, tok);
+
+    return 1;
+}
+
 // 0 - All good
 // 1 - unexpected char
 // 2 - unsupported char
 int scan(char *buf, size_t len, lexer *l) {
-    size_t curr_len = 0;
-    size_t start_col = 0;
     size_t curr_line = 0;
     size_t curr_col = 0;
-    char lex_buf[32];
     assembler_token_type expected_type = assembler_none;
 
-    for(size_t i = 0; i < len; i++) {
+    size_t i = 0;
+    while(i < len) {
         // Numbers and Alphabetical letters (upper and lower case)
-        if ((buf[i] >= 48 && buf[i] <= 57) || (buf[i] >= 65 && buf[i] <= 90) || (buf[i] >= 97 && buf[i] <= 122)) {
-            if(expected_type != assembler_none && expected_type != assembler_string) {
-                err_col = curr_col;
-                err_line = curr_line;
-                err_char = buf[i];
-                return 1;
+        if (is_number(buf[i])) {
+            if(expected_type == assembler_none) {
+                if(consume(buf, l, &i, &curr_col, curr_line, &is_number, assembler_dec)) expected_type = assembler_none;
+                continue;
             }
-            else if(expected_type == assembler_none) {
-                start_col = curr_col;
-                expected_type = assembler_string;
-                curr_len = 0;
+            else {
+                if(!consume(buf, l, &i, &curr_col, curr_line, &is_string, assembler_string)) return 1;
+                expected_type = assembler_none;
+                continue;
             }
-            lex_buf[curr_len] = buf[i];
-            curr_len++;
+        }
+        else if (is_char(buf[i])) {
+            if(expected_type == assembler_none) {
+                if(consume(buf, l, &i, &curr_col, curr_line, &is_char, assembler_opcode)) expected_type = assembler_none;
+                continue;
+            }
+            else {
+                if(!consume(buf, l, &i, &curr_col, curr_line, &is_string, assembler_string)) return 1;
+                expected_type = assembler_none;
+                continue;
+            }
         }
         else {
             switch(buf[i]) {
                 case 32:    //Space
                 case 8:     //Tab
-                    if (curr_len != 0 && expected_type != assembler_none) {
-                        assembler_token tok = {
-                            .type = expected_type,
-                            .column = start_col,
-                            .line = curr_line,
-                            .len = curr_len,
-                        };
-                        memcpy(&tok.lexeme, &lex_buf, curr_len);
-                        append_token(l, tok);
-
-                        curr_len = 0;
-                        start_col = 0;
-                        expected_type = assembler_none;
-                    }
                     break;
                 case 35:    //#
-                    if(curr_len != 0 && expected_type != assembler_none) {
+                    if(expected_type != assembler_none) {
                         err_col = curr_col;
                         err_line = curr_line;
                         err_char = '#';
@@ -203,80 +254,50 @@ int scan(char *buf, size_t len, lexer *l) {
                         append_token(l, tok);
 
                         expected_type = assembler_none;
-                        curr_len = 0;
-                        start_col = 0;
                     }
                     break;
                 case 36:    //$
-                    if(curr_len != 0 && expected_type != assembler_none) {
+                    if(expected_type != assembler_none) {
                         err_col = curr_col;
                         err_line = curr_line;
                         err_char = '$';
                         return 1;
                     }
                     else {
-                        assembler_token tok = {
-                            .type = assembler_hex,
-                            .column = curr_col,
-                            .line = curr_line,
-                            .len = 1,
-                            .lexeme = "$"
-                        };
-                        append_token(l, tok);
-
+                        i++;
+                        curr_col++;
+                        if(!consume(buf, l, &i, &curr_col, curr_line, &is_hex, assembler_hex)) return 1;
                         expected_type = assembler_none;
-                        curr_len = 0;
-                        start_col = 0;
+                        continue;
                     }
                     break;
                 case 37:    //%
-                    if(curr_len != 0 && expected_type != assembler_none) {
+                    if(expected_type != assembler_none) {
                         err_col = curr_col;
                         err_line = curr_line;
                         err_char = '%';
                         return 1;
                     }
                     else {
-                        assembler_token tok = {
-                            .type = assembler_binary,
-                            .column = curr_col,
-                            .line = curr_line,
-                            .len = 1,
-                            .lexeme = "%"
-                        };
-                        append_token(l, tok);
-
+                        i++;
+                        curr_col++;
+                        if(!consume(buf, l, &i, &curr_col, curr_line, &is_binary, assembler_binary)) return 1;
                         expected_type = assembler_none;
-                        curr_len = 0;
-                        start_col = 0;
+                        continue;
                     }
                     break;
                 case 10:    //\n
-                    if (curr_len != 0 && expected_type != assembler_none) {
-                        assembler_token tok = {
-                            .type = expected_type,
-                            .column = start_col,
-                            .line = curr_line,
-                            .len = curr_len,
-                        };
-                        memcpy(&tok.lexeme, &lex_buf, curr_len);
-                        append_token(l, tok);
-                    }
-
-                    assembler_token nl_tok = {
+                    append_token(l, (assembler_token){
                         .type = assembler_nl,
                         .column = curr_col,
                         .line = curr_line,
                         .len = 1,
                         .lexeme = "\n"
-                    };
-                    append_token(l, nl_tok);
+                    });
 
-                    expected_type = assembler_none;
-                    curr_len = 0;
-                    start_col = 0;
                     curr_col = 0;
                     curr_line++;
+                    expected_type = assembler_none;
                     break;
                 default:
                     err_col = curr_col;
@@ -285,8 +306,8 @@ int scan(char *buf, size_t len, lexer *l) {
                     return 2;
             }
         }
-
         curr_col++;
+        i++;
     }
 
     return 0;
