@@ -61,20 +61,24 @@ int read_to_end(char const *path, char **buf, uint8_t add_null) {
     return fsz;
 }
 
+//Returns the value of the byte at pc and increments pc
 uint8_t fetch_byte(cpu *c) {
     return c->memory[c->pc++];
 }
 
+//Gets the value of the given cpu flag
 uint8_t get_cpu_flag(cpu *c, cpu_flag fl) {
     if(c->proc_stat_reg & (1 << fl)) return 1;
     else return 0;
 }
 
+//Sets a cpu flag to a 1 if the given condition is true, other wise 0
 void set_cpu_flag(cpu *c, cpu_flag fl, uint8_t cond) {
     if(cond) c->proc_stat_reg |= (uint8_t)(1 << fl);
     else c->proc_stat_reg &= (uint8_t)~(1 << fl);
 }
 
+//Branches on the argument address if the given expression is true
 void branch(cpu *c, uint8_t expr) {
     int8_t offset = (int8_t)fetch_byte(c);
     if(expr) {
@@ -82,16 +86,19 @@ void branch(cpu *c, uint8_t expr) {
     }
 }
 
+//Pushes a value onto the stack and decrements sp
 void push(cpu* c, uint8_t val) {
     c->memory[0x100 + c->sp] = val;
     c->sp--;
 }
 
+//Pops the top value off of the stack and increments sp
 uint8_t pop(cpu *c) {
     c->sp++;
     return c->memory[0x100 + c->sp];
 }
 
+//Pushes the pc to the stack, in the order: high byte, low byte
 void push_pc(cpu *c) {
     uint8_t high = (uint8_t)(c->pc >> 8);
     uint8_t low = (uint8_t)(c->pc);
@@ -100,43 +107,129 @@ void push_pc(cpu *c) {
     push(c, low);
 }
 
+//Sets the pc to the little endian 2 byte value stored at the given address and its successor
 void set_pc(cpu *c, uint16_t addr) {
     c->pc = (c->memory[addr+1] << 8) | c->memory[addr];
 }
 
 void execute_instr(cpu *c, opcode op) {
-    uint16_t param = fetch_byte(c); //Sticking with immediate mode addressing for all instructions for now
+    uint16_t param; //Sticking with immediate mode addressing for all instructions for now
     switch(op) {
         //Loads value from memory address into accumulator
         case LDA:
+            param = fetch_byte(c);
             c->acc = param;
             set_cpu_flag(c, ZERO, c->acc == 0);
             set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
             break;
         //Loads value from memory address into x register
         case LDX:
+            param = fetch_byte(c);
             c->x = param;
             set_cpu_flag(c, ZERO, c->x == 0);
             set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
             break;
+        //Loads value from memory address into y register
         case LDY:
+            param = fetch_byte(c);
             c->y = param;
             set_cpu_flag(c, ZERO, c->x == 0);
             set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
             break;
         //Stores the value in the accumulator at the given memory address
         case STA:
+            param = fetch_byte(c);
             c->memory[param] = c->acc;
             break;
         //Stores the value in the x register at the given memory address
         case STX:
+            param = fetch_byte(c);
             c->memory[param] = c->x;
+            break;
+        //Stores the value in the y register at the given memory address
+        case STY:
+            param = fetch_byte(c);
+            c->memory[param] = c->y;
+            break;
+        //Transfers accumulator value into x register;
+        case TAX:
+            c->x = c->acc;
+            set_cpu_flag(c, ZERO, c->x == 0);
+            set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
+            break;
+        //Transfers x register value into accumulator;
+        case TXA:
+            c->acc = c->x;
+            set_cpu_flag(c, ZERO, c->acc == 0);
+            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            break;
+        //Transfers accumulator value into y register;
+        case TAY:
+            c->y = c->acc;
+            set_cpu_flag(c, ZERO, c->y == 0);
+            set_cpu_flag(c, NEGATIVE, (c->y & 0x80));
+            break;
+        //Transfers x register value into accumulator;
+        case TYA:
+            c->acc = c->y;
+            set_cpu_flag(c, ZERO, c->acc == 0);
+            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
             break;
         //Increments the value in the x register by 1
         case INX:
             c->x++;
             set_cpu_flag(c, ZERO, c->x == 0);
             set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
+            break;
+        //Decrements the value in the x register by 1
+        case DEX:
+            c->x--;
+            set_cpu_flag(c, ZERO, c->x == 0);
+            set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
+            break;
+        //Increments the value in the y register by 1
+        case INY:
+            c->y++;
+            set_cpu_flag(c, ZERO, c->y == 0);
+            set_cpu_flag(c, NEGATIVE, (c->y & 0x80));
+            break;
+        //Decrements the value in the y register by 1
+        case DEY:
+            c->y--;
+            set_cpu_flag(c, ZERO, c->y == 0);
+            set_cpu_flag(c, NEGATIVE, (c->y & 0x80));
+            break;
+        //Ands the value in the accumulator and some memory value
+        case AND:
+            param = fetch_byte(c);
+            c->acc &= param;
+            set_cpu_flag(c, ZERO, c->acc == 0);
+            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            break;
+        //Ors the value in the accumulator and some memory value
+        case ORA:
+            param = fetch_byte(c);
+            c->acc |= param;
+            set_cpu_flag(c, ZERO, c->acc == 0);
+            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            break;
+        //Xors the value in the accumulator and some memory value
+        case XOR:
+            param = fetch_byte(c);
+            c->acc ^= param;
+            set_cpu_flag(c, ZERO, c->acc == 0);
+            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            break;
+        //Ands the accumulator and a memory value and then sets CPU flags
+        //if any bits are set, specifically NEGATIVE if bit 7 is set
+        //OVERFLOW if bit 6 is set, or ZERO if the result is 0
+        //Does not modfiy the value in the accumulator.
+        case BIT:
+            param = fetch_byte(c);
+            param &= c->acc;
+            set_cpu_flag(c, ZERO, param == 0);
+            set_cpu_flag(c, NEGATIVE, (param & 0x80));
+            set_cpu_flag(c, OVERFLOW, (param & 0x20));
             break;
         //Branches if the zero flag is not set
         case BNE:
@@ -155,6 +248,7 @@ void execute_instr(cpu *c, opcode op) {
             break;
         //Sets the pc to the memory address specified
         case JMP:
+            param = fetch_byte(c);
             c->pc = c->memory[param];
             break;
         default:
@@ -163,6 +257,7 @@ void execute_instr(cpu *c, opcode op) {
     }
 }
 
+//Prints the state of the cpu, meaning the contents of its registers, the value of sp and pc, and the state of all flags
 void print_cpu_state(cpu *c) {
     printf("Accumulator: %hhu \nX Register: %hhu \nY Register: %hhu \nStack Pointer: %hhu\nPC: %hu\n", c->acc, c->x, c->y, c->sp, c->pc);
     printf("Status Register:\n Carry: %hhu\n Zero: %hhu\n Interrupt Disable: %hhu\n Decimal: %hhu\n Break: %hhu\n Overflow: %hhu\n Negative: %hhu\n",
@@ -170,6 +265,7 @@ void print_cpu_state(cpu *c) {
            get_cpu_flag(c, BREAK), get_cpu_flag(c, OVERFLOW), get_cpu_flag(c, NEGATIVE));
 }
 
+//Prints the current contents of the stack in a numbered list with the most recently added value at the top
 void print_stack(cpu *c) {
     printf("Addr    Val\n");
     for(int i = c->sp+1; i < 256; i++) {
@@ -177,6 +273,7 @@ void print_stack(cpu *c) {
     }
 }
 
+//Prints the entire contents of a given page in memory in byte form in a nice square block
 void print_page(cpu *c, uint8_t page_num) {
     uint16_t start_addr = page_num * 256;
 
@@ -184,6 +281,7 @@ void print_page(cpu *c, uint8_t page_num) {
         if(i > 0 && i % 16 == 0) printf("\n");
         printf("%02X ", c->memory[start_addr+i]);
     }
+    printf("\n");
 }
 
 int main(void) {
@@ -210,7 +308,7 @@ int main(void) {
     }
     print_cpu_state(&c);
     print_stack(&c);
-    print_page(&c, 2);
+    print_page(&c, 0);
 
     free(buf);
 
