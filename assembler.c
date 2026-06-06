@@ -6,10 +6,8 @@
 #include <string.h>
 #include "cpu.h"
 
-// TODO: Make a simple parser to parse the assembly and write the equivalent bytes to the
-// output file
-
 #define num_instr 8
+#define max_value 
 
 size_t err_line = 0;
 size_t err_col = 0;
@@ -258,10 +256,10 @@ int scan(char *buf, size_t len, lexer *l) {
         }
         else {
             switch(buf[i]) {
-                case 32:    //Space
-                case 8:     //Tab
+                case ' ':    //Space
+                case '\t':     //Tab
                     break;
-                case 35:    //#
+                case '#':    //#
                     if(expected_type != assembler_none) {
                         err_col = curr_col;
                         err_line = curr_line;
@@ -281,7 +279,7 @@ int scan(char *buf, size_t len, lexer *l) {
                         expected_type = assembler_none;
                     }
                     break;
-                case 36:    //$
+                case '$':    //$
                     if(expected_type != assembler_none) {
                         err_col = curr_col;
                         err_line = curr_line;
@@ -296,7 +294,7 @@ int scan(char *buf, size_t len, lexer *l) {
                         continue;
                     }
                     break;
-                case 37:    //%
+                case '%':    //%
                     if(expected_type != assembler_none) {
                         err_col = curr_col;
                         err_line = curr_line;
@@ -311,7 +309,7 @@ int scan(char *buf, size_t len, lexer *l) {
                         continue;
                     }
                     break;
-                case 10:    //\n
+                case '\n':    //\n
                     append_token(l, (assembler_token){
                         .type = assembler_nl,
                         .column = curr_col,
@@ -338,15 +336,93 @@ int scan(char *buf, size_t len, lexer *l) {
     return 0;
 }
 
-// void read() {
-//     FILE *fptr = fopen("input.txt", "r");
-//     char *buf;
-//
-//     int len = read_to_end("input.txt", &buf, 1);
-//     fclose(fptr);
-//
-//     write_text(buf, len);
-// }
+uint32_t parse_dec(char *str, size_t len) {
+    uint32_t ret = 0;
+
+    for(size_t i = 0; i < len; i++) {
+        ret *= 10;
+        ret += str[i] - '0';
+    }
+    return ret;
+}
+
+uint32_t parse_binary(char *str, size_t len) {
+    uint32_t ret = 0;
+
+    for(size_t i = 0; i < len; i++) {
+        ret *= 2;
+        ret += str[i] - '0';
+    }
+    return ret;
+}
+
+uint32_t parse_hex(char *str, size_t len) {
+    uint32_t ret = 0;
+
+    for(size_t i = 0; i < len; i++) {
+        ret *= 16;
+        ret += (is_number(str[i])) ? str[i] - '0' : (toupper(str[i]) - 'A') + 10;
+    }
+    return ret;
+}
+
+int parse(lexer *l, char *out) {
+    assembler_token_type previous_type = assembler_none;
+
+    size_t i = 0;
+    size_t ch_ptr = 0;
+    uint32_t res = 0;
+    while(i < l->len) {
+        assembler_token tok = l->tokens[i];
+        printf("%s\n", token_type_string(tok.type));
+        switch(previous_type) {
+            case assembler_none:
+            case assembler_nl:
+                if(tok.type == assembler_opcode0 || tok.type == assembler_opcode1) {
+                    for(size_t j = 0; j < num_instr; j++) {
+                        if(!strcmp(tok.lexeme, instr[j])) {
+                            out[ch_ptr++] = j;
+                            break;
+                        }
+                    }
+                }
+                else {
+                    return -1;
+                }
+            break;
+            case assembler_opcode1:
+                switch(tok.type) {
+                    case assembler_dec:
+                        res = parse_dec(tok.lexeme, tok.len);
+                        break;
+                    case assembler_hex:
+                        res = parse_hex(tok.lexeme, tok.len);
+                        break;
+                    case assembler_binary:
+                        res = parse_binary(tok.lexeme, tok.len);
+                        break;
+                    default:
+                        return -2;
+                }
+                if(res > MEMORY_SIZE - 1) return -3;
+                else if(res > 255) {
+                    //Need to split it into two bytes
+                    out[ch_ptr++] = (uint8_t)(res & 0xFF);
+                    out[ch_ptr++] = (uint8_t)((res & 0xFF00) >> 8);
+                }
+                else {
+                    out[ch_ptr++] = (uint8_t)(res & 0xFF);
+                }
+                break;
+            default:
+                if(tok.type != assembler_nl) return -4;
+        }
+        previous_type = tok.type;
+        i++;
+    }
+
+    return ch_ptr;
+}
 
 int main(void) {
     FILE *fptr = fopen("input.txt", "r");
@@ -363,6 +439,10 @@ int main(void) {
     if(res) {
         printf("Error line: %zu, Error col: %zu, Error char: %c\n", err_line, err_col, err_char);
     }
+    char out_buf[l.len*2];
+    int parsed_len = parse(&l, out_buf);
+    printf("Parsed len: %i\n", parsed_len);
+    if(parsed_len > 0) write_text(out_buf, parsed_len);
 
     return 0;
 }
