@@ -1,9 +1,66 @@
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "cpu.h"
 
 //Logical operators
 //Mathematical operators
+
+int read_to_end(char const *path, char **buf, uint8_t add_null) {
+    FILE *fp;
+    size_t fsz;
+    long offEnd;
+    int rc;
+
+    //Open the file
+    fp = fopen(path, "rb");
+    if(NULL == fp) {
+        return -1;
+    }
+
+    //Seek to the end of the file
+    rc = fseek(fp, 0L, SEEK_END);
+    if(0 != rc) {
+        return -1;
+    }
+
+    //Byte offset to the end of the file size
+    if(0 > (offEnd = ftell(fp))) {
+        return -1;
+    }
+    fsz = (size_t)offEnd;
+
+    //Allocate a buffer to hold the whole file
+    *buf = malloc(fsz + (int)add_null);
+    if(NULL == *buf) {
+        return -1;
+    }
+
+    //Rewind file pointer to the start of the file:
+    rewind(fp);
+
+    //Place the file into a buffer
+    if(fsz != fread(*buf, 1, fsz, fp)) {
+        free(buf);
+        return -1;
+    }
+
+    //Close the file
+    if(EOF == fclose(fp)) {
+        free(*buf);
+        return -1;
+    }
+
+    //Add null terminator
+    if(add_null) {
+        buf[fsz] = "\0";
+    }
+
+    return fsz;
+}
+
 uint8_t fetch_byte(cpu *c) {
     return c->memory[c->pc++];
 }
@@ -48,17 +105,22 @@ void set_pc(cpu *c, uint16_t addr) {
 }
 
 void execute_instr(cpu *c, opcode op) {
-    uint16_t param = 0;
+    uint16_t param = fetch_byte(c); //Sticking with immediate mode addressing for all instructions for now
     switch(op) {
         //Loads value from memory address into accumulator
         case LDA:
-            c->acc = c->memory[param];
+            c->acc = param;
             set_cpu_flag(c, ZERO, c->acc == 0);
             set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
             break;
         //Loads value from memory address into x register
         case LDX:
-            c->x = c->memory[param];
+            c->x = param;
+            set_cpu_flag(c, ZERO, c->x == 0);
+            set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
+            break;
+        case LDY:
+            c->y = param;
             set_cpu_flag(c, ZERO, c->x == 0);
             set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
             break;
@@ -115,18 +177,42 @@ void print_stack(cpu *c) {
     }
 }
 
+void print_page(cpu *c, uint8_t page_num) {
+    uint16_t start_addr = page_num * 256;
+
+    for(int i = 0; i < 256; i++) {
+        if(i > 0 && i % 16 == 0) printf("\n");
+        printf("%02X ", c->memory[start_addr+i]);
+    }
+}
+
 int main(void) {
     cpu c = {0};
     c.sp = 0xFF;
-    c.memory[0] = 56;
-    c.memory[1] = 25;
-    c.memory[0xFFFE] = 0x34;
-    c.memory[0xFFFF] = 0x12;
 
-    fetch_byte(&c);
-    execute_instr(&c, BRK);
+    char *buf;
+    int sz = read_to_end("output.txt", &buf, 0);
+    if(sz < 0) {
+        fprintf(stderr, "Error when opening a file\n");
+        return 0;
+    }
+
+    uint16_t endpt = c.pc + sz;
+    memcpy(c.memory, buf, sz);
+
+    for(int i = 0; i < sz; i++) {
+        printf("%i:   %02X\n", i, c.memory[i]);
+    }
+
+    while(c.pc < endpt) {
+        uint8_t instr = fetch_byte(&c);
+        execute_instr(&c, instr);
+    }
     print_cpu_state(&c);
     print_stack(&c);
+    print_page(&c, 2);
+
+    free(buf);
 
     return 0;
 }

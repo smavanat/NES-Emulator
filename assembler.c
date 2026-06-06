@@ -6,16 +6,15 @@
 #include <string.h>
 #include "cpu.h"
 
-#define num_instr 8
-#define max_value 
+#define num_instr 10
 
 size_t err_line = 0;
 size_t err_col = 0;
 char err_char = 0;
 
 //TODO: Make this into a hashmap
-char *instr[num_instr] = {"LDA", "LDX", "STA", "STX", "INX", "BNE", "BRK", "JMP"};
-uint8_t nparams[num_instr] = {1, 1, 0, 0, 0, 1, 0, 1};
+char *instr[num_instr] = {"LDA", "LDX", "LDY", "STA", "STX", "STY", "INX", "BNE", "BRK", "JMP"};
+uint8_t nparams[num_instr] = {1, 1, 1, 1, 1, 1, 0, 1, 0, 1};
 
 void write_text(char *text, size_t len) {
     FILE *fptr = fopen("output.txt", "w");
@@ -370,7 +369,7 @@ int parse(lexer *l, char *out) {
     assembler_token_type previous_type = assembler_none;
 
     size_t i = 0;
-    size_t ch_ptr = 0;
+    int ch_ptr = 0;
     uint32_t res = 0;
     while(i < l->len) {
         assembler_token tok = l->tokens[i];
@@ -390,6 +389,7 @@ int parse(lexer *l, char *out) {
                     return -1;
                 }
             break;
+            case assembler_imm:
             case assembler_opcode1:
                 switch(tok.type) {
                     case assembler_dec:
@@ -401,17 +401,22 @@ int parse(lexer *l, char *out) {
                     case assembler_binary:
                         res = parse_binary(tok.lexeme, tok.len);
                         break;
+                    case assembler_imm:
+                        if(previous_type == assembler_imm) return -2;
+                        break;
                     default:
                         return -2;
                 }
-                if(res > MEMORY_SIZE - 1) return -3;
-                else if(res > 255) {
-                    //Need to split it into two bytes
-                    out[ch_ptr++] = (uint8_t)(res & 0xFF);
-                    out[ch_ptr++] = (uint8_t)((res & 0xFF00) >> 8);
-                }
-                else {
-                    out[ch_ptr++] = (uint8_t)(res & 0xFF);
+                if(tok.type != assembler_imm) {
+                    if(res > MEMORY_SIZE - 1) return -3;
+                    else if(res > 255) {
+                        //Need to split it into two bytes
+                        out[ch_ptr++] = (uint8_t)(res & 0xFF);
+                        out[ch_ptr++] = (uint8_t)((res & 0xFF00) >> 8);
+                    }
+                    else {
+                        out[ch_ptr++] = (uint8_t)(res & 0xFF);
+                    }
                 }
                 break;
             default:
@@ -442,7 +447,10 @@ int main(void) {
     char out_buf[l.len*2];
     int parsed_len = parse(&l, out_buf);
     printf("Parsed len: %i\n", parsed_len);
-    if(parsed_len > 0) write_text(out_buf, parsed_len);
+    if(parsed_len > 0) write_text(out_buf, (size_t)parsed_len);
+
+    free(l.tokens);
+    free(buf);
 
     return 0;
 }

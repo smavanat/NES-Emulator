@@ -25,8 +25,10 @@ typedef enum {
 typedef enum {
     LDA,
     LDX,
+    LDY,
     STA,
     STX,
+    STY,
     INX,
     BNE,
     BRK,

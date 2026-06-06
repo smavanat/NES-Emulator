@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -Wall -Wextra
+CFLAGS := -Wall -Wextra -fsanitize=address -g
 
 main: main.c
 	$(CC) $(CFLAGS) main.c -o main
