@@ -1,6 +1,7 @@
 //This file contains an assembler for converting 6502 assembly into bytecode
 //This is done using a simple parser to tokenise the given file and check the syntax,
 //before looking up opcode values in a lookup table
+//TODO: Add support for comments
 
 #include <ctype.h>
 #include <stddef.h>
@@ -206,7 +207,7 @@ uint8_t consume(char *buf, lexer *l, size_t *i, size_t *curr_col, size_t curr_li
     }
 
     //If the char after the label is not blank, we may have an error
-    if(buf[(*i)] != ' ' && buf[(*i)] != '\n' && buf[(*i)] != '\t') {
+    if(buf[(*i)] != ' ' && buf[(*i)] != '\n' && buf[(*i)] != '\t' && buf[(*i)] != '/') {
         err_col = start_col+curr_len;
         err_line = curr_line;
         err_char = buf[(*i)];
@@ -357,6 +358,22 @@ int tokenise(char *buf, size_t len, lexer *l) {
                     curr_line++;
                     expected_type = assembler_none;
                     break;
+                case '/':
+                    if(i < len && buf[i+1] == '/') {
+                        i++;
+                        curr_col++;
+                        while(i < len && buf[i] != '\n') {
+                            i++;
+                            curr_col++;
+                        }
+                        continue;
+                    }
+                    else {
+                        err_col = curr_col;
+                        err_line = curr_line;
+                        err_char = '/';
+                        return 1;
+                    }
                 //Usupported char
                 default:
                     err_col = curr_col;
@@ -427,7 +444,6 @@ int parse(lexer *l, char *out) {
     //Loop compares current a previous tokens to see if they match any productions
     while(i < l->len) {
         assembler_token tok = l->tokens[i];
-        printf("%s\n", token_type_string(tok.type));
         switch(previous_type) {
             //If at the start of a line, first token must be an opcode
             case assembler_none:
@@ -442,7 +458,7 @@ int parse(lexer *l, char *out) {
                     }
                 }
                 //If the opcode somehow doesn't exist
-                else {
+                else if(tok.type != assembler_nl) {
                     return -1;
                 }
             break;
