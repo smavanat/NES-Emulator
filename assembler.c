@@ -17,8 +17,8 @@ size_t err_col = 0;
 char err_char = 0;
 
 //TODO: Make this into a hashmap
-char *instr[num_instr] = {"LDA", "LDX", "LDY", "STA", "STX", "STY", "TAX", "TXA", "TAY", "TYA", "ADC", "SBC", "INC", "DEC", "INX", "DEX", "INY", "DEY", "ASL", "LSR", "ROL", "ROR", "AND", "ORA", "XOR", "BIT", "CMP", "CPX", "CPY", "BCC", "BCS", "BEQ", "BNE", "BPL", "BMI", "BVC", "BVS", "JMP", "BRK", "NOP"};
-uint8_t nparams[num_instr] = {1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0};
+char *instr[num_instr] = {"LDA", "LDX", "LDY", "STA", "STX", "STY", "TAX", "TXA", "TAY", "TYA", "ADC", "SBC", "INC", "DEC", "INX", "DEX", "INY", "DEY", "ASL", "LSR", "ROL", "ROR", "AND", "ORA", "XOR", "BIT", "CMP", "CPX", "CPY", "BCC", "BCS", "BEQ", "BNE", "BPL", "BMI", "BVC", "BVS", "JMP", "JSR", "RTS", "BRK", "RTI", "NOP", "STP"};
+uint8_t nparams[num_instr] = {1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0};
 
 void write_text(char *text, size_t len) {
     FILE *fptr = fopen("output.txt", "w");

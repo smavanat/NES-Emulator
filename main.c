@@ -5,8 +5,7 @@
 #include <string.h>
 #include "cpu.h"
 
-//Logical operators
-//Mathematical operators
+uint8_t stop = 0;
 
 int read_to_end(char const *path, char **buf, uint8_t add_null) {
     FILE *fp;
@@ -93,7 +92,7 @@ void push(cpu* c, uint8_t val) {
 }
 
 //Pops the top value off of the stack and increments sp
-uint8_t pop(cpu *c) {
+uint8_t pull(cpu *c) {
     c->sp++;
     return c->memory[0x100 + c->sp];
 }
@@ -105,6 +104,13 @@ void push_pc(cpu *c) {
 
     push(c, high);
     push(c, low);
+}
+
+void pull_pc(cpu *c) {
+    uint8_t low = pull(c);
+    uint8_t high = pull(c);
+
+    c->pc = (high << 8) | low;
 }
 
 //Sets the pc to the little endian 2 byte value stored at the given address and its successor
@@ -363,6 +369,22 @@ void execute_instr(cpu *c, opcode op) {
         case BVS:
             branch(c, get_cpu_flag(c, OVERFLOW));
             break;
+        //Sets the pc to the memory address specified
+        case JMP:
+            param[0] = fetch_byte(c);
+            c->pc = c->memory[param[0]];
+            break;
+        //Pushes the pc onto the stack and jumps to the subroutine
+        //at the given memory address
+        case JSR:
+            param[0] = fetch_byte(c);
+            push_pc(c);
+            c->pc = param[0];
+            break;
+        //Returns from a subroutine by pulling the pc from the stack
+        case RTS:
+            pull_pc(c);
+            break;
         //Pushes the high and low bytes of the pc to the stack (separately);
         //Pushes the processor status register with the Break flag set to true to the stack
         //Disables interrupts
@@ -374,13 +396,18 @@ void execute_instr(cpu *c, opcode op) {
             set_cpu_flag(c, INTERRUPT_DISABLE, 1);
             set_pc(c, 0xFFFE);
             break;
-        //Sets the pc to the memory address specified
-        case JMP:
-            param[0] = fetch_byte(c);
-            c->pc = c->memory[param[0]];
+        //Returns from an interrupt by pulling the flags from
+        //the stack and then pulling the old pc from the stack
+        case RTI:
+            c->proc_stat_reg = pull(c);
+            pull_pc(c);
             break;
         //Do nothing. Its in the name
         case NOP:
+            break;
+        //Stop the program early
+        case STP:
+            stop = 1;
             break;
         default:
             printf("Opcode not supported\n");
@@ -418,6 +445,8 @@ void print_page(cpu *c, uint8_t page_num) {
 int main(void) {
     cpu c = {0};
     c.sp = 0xFF;
+    c.memory[0xFFFE] = 25;
+    c.memory[25] = RTS;
 
     char *buf;
     int sz = read_to_end("output.txt", &buf, 0);
@@ -425,15 +454,13 @@ int main(void) {
         fprintf(stderr, "Error when opening a file\n");
         return 0;
     }
-
-    uint16_t endpt = c.pc + sz;
     memcpy(c.memory, buf, sz);
 
     for(int i = 0; i < sz; i++) {
         printf("%i:   %02X\n", i, c.memory[i]);
     }
 
-    while(c.pc < endpt) {
+    while(stop == 0) {
         uint8_t instr = fetch_byte(&c);
         execute_instr(&c, instr);
     }
