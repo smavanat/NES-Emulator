@@ -47,6 +47,12 @@ typedef enum {
     INY,
     DEY,
 
+    //Shift
+    ASL,
+    LSR,
+    ROL,
+    ROR,
+
     //Bitwise
     AND,
     ORA,

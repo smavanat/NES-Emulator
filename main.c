@@ -175,6 +175,9 @@ void execute_instr(cpu *c, opcode op) {
             set_cpu_flag(c, ZERO, c->acc == 0);
             set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
             break;
+        //Adds a memory value and the carry flag to the accumulator
+        //Sets the carry flag if there is overflow
+        //Sets the overflow flag if there is signed overflow (result has different sign from both memory value and accumulator)
         case ADC:
             param[0] = fetch_byte(c);
             param[1] = c->acc + param[0] + get_cpu_flag(c, CARRY);
@@ -185,22 +188,27 @@ void execute_instr(cpu *c, opcode op) {
             set_cpu_flag(c, NEGATIVE,  param[2] & 0x80);
             c->acc = (uint8_t)param[1];
             break;
+        //Subtracts a memory value and the carry flag to the accumulator
+        //Sets the carry flag if there is overflow
+        //Sets the overflow flag if there is signed overflow (result has different sign from both memory value and accumulator)
         case SBC:
             param[0] = fetch_byte(c);
             param[1] = c->acc - param[0] - !get_cpu_flag(c, CARRY);
-            param[2] = (uint8_t)param[1];
+param[2] = (uint8_t)param[1];
             set_cpu_flag(c, CARRY, !(param[1] < 0xFF));
             set_cpu_flag(c, ZERO, param[2] == 0);
             set_cpu_flag(c, OVERFLOW, (c->acc ^ param[2]) & (param[2] ^ ~param[0]) & 0x80);
             set_cpu_flag(c, NEGATIVE,  param[2] & 0x80);
             c->acc = (uint8_t)param[1];
             break;
+        //Increments a given memory value by 1
         case INC:
             param[0] = fetch_byte(c);
             c->memory[param[0]]++;
             set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
             set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
             break;
+        //Decrements a given memory value by 1
         case DEC:
             param[0] = fetch_byte(c);
             c->memory[param[0]]--;
@@ -230,6 +238,36 @@ void execute_instr(cpu *c, opcode op) {
             c->y--;
             set_cpu_flag(c, ZERO, c->y == 0);
             set_cpu_flag(c, NEGATIVE, (c->y & 0x80));
+            break;
+        case ASL:
+            param[0] = fetch_byte(c);
+            set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x80));
+            c->memory[param[0]] <<= 1;
+            set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
+            set_cpu_flag(c, NEGATIVE, c->memory[param[0]] & 0x80);
+            break;
+        case LSR:
+            param[0] = fetch_byte(c);
+            set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x1));
+            c->memory[param[0]] >>= 1;
+            c->memory[param[0]] |= (get_cpu_flag(c, CARRY) << 7);
+            set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
+            set_cpu_flag(c, NEGATIVE, 0);
+            break;
+        case ROL:
+            param[0] = fetch_byte(c);
+            set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x80));
+            c->memory[param[0]] <<= 1;
+            c->memory[param[0]] |= get_cpu_flag(c, CARRY);
+            set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
+            set_cpu_flag(c, NEGATIVE, c->memory[param[0]] & 0x80);
+            break;
+        case ROR:
+            param[0] = fetch_byte(c);
+            set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x1));
+            c->memory[param[0]] >>= 1;
+            set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
+            set_cpu_flag(c, NEGATIVE, c->memory[param[0]] & 0x80);
             break;
         //Ands the value in the accumulator and some memory value
         case AND:

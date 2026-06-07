@@ -1,7 +1,6 @@
 //This file contains an assembler for converting 6502 assembly into bytecode
 //This is done using a simple parser to tokenise the given file and check the syntax,
 //before looking up opcode values in a lookup table
-//TODO: Add support for comments
 
 #include <ctype.h>
 #include <stddef.h>
@@ -11,15 +10,15 @@
 #include <string.h>
 #include "cpu.h"
 
-#define num_instr 25
+#define num_instr 29
 
 size_t err_line = 0;
 size_t err_col = 0;
 char err_char = 0;
 
 //TODO: Make this into a hashmap
-char *instr[num_instr] = {"LDA", "LDX", "LDY", "STA", "STX", "STY", "TAX", "TXA", "TAY", "TYA", "ADC", "SBC", "INC", "DEC", "INX", "DEX", "INY", "DEY", "AND", "ORA", "XOR", "BIT", "BNE", "BRK", "JMP"};
-uint8_t nparams[num_instr] = {1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1};
+char *instr[num_instr] = {"LDA", "LDX", "LDY", "STA", "STX", "STY", "TAX", "TXA", "TAY", "TYA", "ADC", "SBC", "INC", "DEC", "INX", "DEX", "INY", "DEY", "ASL", "LSR", "ROL", "ROR", "AND", "ORA", "XOR", "BIT", "BNE", "BRK", "JMP"};
+uint8_t nparams[num_instr] = {1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1};
 
 void write_text(char *text, size_t len) {
     FILE *fptr = fopen("output.txt", "w");
