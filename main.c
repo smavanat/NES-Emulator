@@ -331,9 +331,37 @@ void execute_instr(cpu *c, opcode op) {
         case CPY:
             compare(c, c->y, fetch_byte(c));
             break;
+        //Branches if the carry flag is not set
+        case BCC:
+            branch(c, !get_cpu_flag(c, CARRY));
+            break;
+        //Braches if the carry flag is set
+        case BCS:
+            branch(c, get_cpu_flag(c, CARRY));
+            break;
+        //Branches if the zero flag is set
+        case BEQ:
+            branch(c, get_cpu_flag(c, ZERO));
+            break;
         //Branches if the zero flag is not set
         case BNE:
             branch(c, !get_cpu_flag(c, ZERO));
+            break;
+        //Branches if the negative flag is not set
+        case BPL:
+            branch(c, !get_cpu_flag(c, NEGATIVE));
+            break;
+        //Branches if the negative flag is set
+        case BMI:
+            branch(c, get_cpu_flag(c, NEGATIVE));
+            break;
+        //Branches if the overflow flag is not set
+        case BVC:
+            branch(c, !get_cpu_flag(c, OVERFLOW));
+            break;
+        //Branches if the overflow flag is set
+        case BVS:
+            branch(c, get_cpu_flag(c, OVERFLOW));
             break;
         //Pushes the high and low bytes of the pc to the stack (separately);
         //Pushes the processor status register with the Break flag set to true to the stack
@@ -350,6 +378,9 @@ void execute_instr(cpu *c, opcode op) {
         case JMP:
             param[0] = fetch_byte(c);
             c->pc = c->memory[param[0]];
+            break;
+        //Do nothing. Its in the name
+        case NOP:
             break;
         default:
             printf("Opcode not supported\n");

@@ -65,10 +65,19 @@ typedef enum {
     CPY,
 
     //Branch
+    BCC,
+    BCS,
+    BEQ,
     BNE,
-    BRK,
+    BPL,
+    BMI,
+    BVC,
+    BVS,
 
     //Jump
     JMP,
+    BRK,
+
+    NOP,
 } opcode;
 
