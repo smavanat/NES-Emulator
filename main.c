@@ -113,43 +113,43 @@ void set_pc(cpu *c, uint16_t addr) {
 }
 
 void execute_instr(cpu *c, opcode op) {
-    uint16_t param; //Sticking with immediate mode addressing for all instructions for now
+    uint16_t param[4]; //Sticking with immediate mode addressing for all instructions for now
     switch(op) {
         //Loads value from memory address into accumulator
         case LDA:
-            param = fetch_byte(c);
-            c->acc = param;
+            param[0] = fetch_byte(c);
+            c->acc = param[0];
             set_cpu_flag(c, ZERO, c->acc == 0);
             set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
             break;
         //Loads value from memory address into x register
         case LDX:
-            param = fetch_byte(c);
-            c->x = param;
+            param[0] = fetch_byte(c);
+            c->x = param[0];
             set_cpu_flag(c, ZERO, c->x == 0);
             set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
             break;
         //Loads value from memory address into y register
         case LDY:
-            param = fetch_byte(c);
-            c->y = param;
+            param[0] = fetch_byte(c);
+            c->y = param[0];
             set_cpu_flag(c, ZERO, c->x == 0);
             set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
             break;
         //Stores the value in the accumulator at the given memory address
         case STA:
-            param = fetch_byte(c);
-            c->memory[param] = c->acc;
+            param[0] = fetch_byte(c);
+            c->memory[param[0]] = c->acc;
             break;
         //Stores the value in the x register at the given memory address
         case STX:
-            param = fetch_byte(c);
-            c->memory[param] = c->x;
+            param[0] = fetch_byte(c);
+            c->memory[param[0]] = c->x;
             break;
         //Stores the value in the y register at the given memory address
         case STY:
-            param = fetch_byte(c);
-            c->memory[param] = c->y;
+            param[0] = fetch_byte(c);
+            c->memory[param[0]] = c->y;
             break;
         //Transfers accumulator value into x register;
         case TAX:
@@ -174,6 +174,38 @@ void execute_instr(cpu *c, opcode op) {
             c->acc = c->y;
             set_cpu_flag(c, ZERO, c->acc == 0);
             set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            break;
+        case ADC:
+            param[0] = fetch_byte(c);
+            param[1] = c->acc + param[0] + get_cpu_flag(c, CARRY);
+            param[2] = (uint8_t)param[1];
+            set_cpu_flag(c, CARRY, param[1] > 0xFF);
+            set_cpu_flag(c, ZERO, param[2] == 0);
+            set_cpu_flag(c, OVERFLOW, (c->acc ^ param[2]) & (param[2] ^ param[0]) & 0x80);
+            set_cpu_flag(c, NEGATIVE,  param[2] & 0x80);
+            c->acc = (uint8_t)param[1];
+            break;
+        case SBC:
+            param[0] = fetch_byte(c);
+            param[1] = c->acc - param[0] - !get_cpu_flag(c, CARRY);
+            param[2] = (uint8_t)param[1];
+            set_cpu_flag(c, CARRY, !(param[1] < 0xFF));
+            set_cpu_flag(c, ZERO, param[2] == 0);
+            set_cpu_flag(c, OVERFLOW, (c->acc ^ param[2]) & (param[2] ^ ~param[0]) & 0x80);
+            set_cpu_flag(c, NEGATIVE,  param[2] & 0x80);
+            c->acc = (uint8_t)param[1];
+            break;
+        case INC:
+            param[0] = fetch_byte(c);
+            c->memory[param[0]]++;
+            set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
+            set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
+            break;
+        case DEC:
+            param[0] = fetch_byte(c);
+            c->memory[param[0]]--;
+            set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
+            set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
             break;
         //Increments the value in the x register by 1
         case INX:
@@ -201,22 +233,22 @@ void execute_instr(cpu *c, opcode op) {
             break;
         //Ands the value in the accumulator and some memory value
         case AND:
-            param = fetch_byte(c);
-            c->acc &= param;
+            param[0] = fetch_byte(c);
+            c->acc &= param[0];
             set_cpu_flag(c, ZERO, c->acc == 0);
             set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
             break;
         //Ors the value in the accumulator and some memory value
         case ORA:
-            param = fetch_byte(c);
-            c->acc |= param;
+            param[0] = fetch_byte(c);
+            c->acc |= param[0];
             set_cpu_flag(c, ZERO, c->acc == 0);
             set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
             break;
         //Xors the value in the accumulator and some memory value
         case XOR:
-            param = fetch_byte(c);
-            c->acc ^= param;
+            param[0] = fetch_byte(c);
+            c->acc ^= param[0];
             set_cpu_flag(c, ZERO, c->acc == 0);
             set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
             break;
@@ -225,11 +257,11 @@ void execute_instr(cpu *c, opcode op) {
         //OVERFLOW if bit 6 is set, or ZERO if the result is 0
         //Does not modfiy the value in the accumulator.
         case BIT:
-            param = fetch_byte(c);
-            param &= c->acc;
-            set_cpu_flag(c, ZERO, param == 0);
-            set_cpu_flag(c, NEGATIVE, (param & 0x80));
-            set_cpu_flag(c, OVERFLOW, (param & 0x20));
+            param[0] = fetch_byte(c);
+            param[0] &= c->acc;
+            set_cpu_flag(c, ZERO, param[0] == 0);
+            set_cpu_flag(c, NEGATIVE, (param[0] & 0x80));
+            set_cpu_flag(c, OVERFLOW, (param[0] & 0x20));
             break;
         //Branches if the zero flag is not set
         case BNE:
@@ -248,8 +280,8 @@ void execute_instr(cpu *c, opcode op) {
             break;
         //Sets the pc to the memory address specified
         case JMP:
-            param = fetch_byte(c);
-            c->pc = c->memory[param];
+            param[0] = fetch_byte(c);
+            c->pc = c->memory[param[0]];
             break;
         default:
             printf("Opcode not supported\n");

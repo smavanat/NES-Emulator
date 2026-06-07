@@ -11,15 +11,15 @@
 #include <string.h>
 #include "cpu.h"
 
-#define num_instr 21
+#define num_instr 25
 
 size_t err_line = 0;
 size_t err_col = 0;
 char err_char = 0;
 
 //TODO: Make this into a hashmap
-char *instr[num_instr] = {"LDA", "LDX", "LDY", "STA", "STX", "STY", "TAX", "TXA", "TAY", "TYA", "INX", "DEX", "INY", "DEY", "AND", "ORA", "XOR", "BIT", "BNE", "BRK", "JMP"};
-uint8_t nparams[num_instr] = {1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1};
+char *instr[num_instr] = {"LDA", "LDX", "LDY", "STA", "STX", "STY", "TAX", "TXA", "TAY", "TYA", "ADC", "SBC", "INC", "DEC", "INX", "DEX", "INY", "DEY", "AND", "ORA", "XOR", "BIT", "BNE", "BRK", "JMP"};
+uint8_t nparams[num_instr] = {1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1};
 
 void write_text(char *text, size_t len) {
     FILE *fptr = fopen("output.txt", "w");

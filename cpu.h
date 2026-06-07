@@ -23,26 +23,41 @@ typedef enum {
 } cpu_flag;
 
 typedef enum {
+    // Load and store
     LDA,
     LDX,
     LDY,
     STA,
     STX,
     STY,
+
+    //Transfer
     TAX,
     TXA,
     TAY,
     TYA,
+
+    //Arithmetic
+    ADC,
+    SBC,
+    INC,
+    DEC,
     INX,
     DEX,
     INY,
     DEY,
+
+    //Bitwise
     AND,
     ORA,
     XOR,
     BIT,
+
+    //Branch
     BNE,
     BRK,
+
+    //Jump
     JMP,
 } opcode;
 
