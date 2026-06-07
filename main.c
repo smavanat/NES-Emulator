@@ -112,6 +112,12 @@ void set_pc(cpu *c, uint16_t addr) {
     c->pc = (c->memory[addr+1] << 8) | c->memory[addr];
 }
 
+void compare(cpu *c, uint8_t v1, uint8_t v2) {
+    set_cpu_flag(c, CARRY, v1 >= v2);
+    set_cpu_flag(c, ZERO, v1 == v2);
+    set_cpu_flag(c, NEGATIVE, (v1 - v2) & 0x80);
+}
+
 void execute_instr(cpu *c, opcode op) {
     uint16_t param[4]; //Sticking with immediate mode addressing for all instructions for now
     switch(op) {
@@ -194,7 +200,7 @@ void execute_instr(cpu *c, opcode op) {
         case SBC:
             param[0] = fetch_byte(c);
             param[1] = c->acc - param[0] - !get_cpu_flag(c, CARRY);
-param[2] = (uint8_t)param[1];
+            param[2] = (uint8_t)param[1];
             set_cpu_flag(c, CARRY, !(param[1] < 0xFF));
             set_cpu_flag(c, ZERO, param[2] == 0);
             set_cpu_flag(c, OVERFLOW, (c->acc ^ param[2]) & (param[2] ^ ~param[0]) & 0x80);
@@ -239,6 +245,8 @@ param[2] = (uint8_t)param[1];
             set_cpu_flag(c, ZERO, c->y == 0);
             set_cpu_flag(c, NEGATIVE, (c->y & 0x80));
             break;
+        //Shifts a memory value one bit to the left,
+        //Setting the carry flag to the bit shifted out
         case ASL:
             param[0] = fetch_byte(c);
             set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x80));
@@ -246,6 +254,8 @@ param[2] = (uint8_t)param[1];
             set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
             set_cpu_flag(c, NEGATIVE, c->memory[param[0]] & 0x80);
             break;
+        //Shifts a memory value one bit to the right,
+        //Setting the carry flag to the bit shifted out
         case LSR:
             param[0] = fetch_byte(c);
             set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x1));
@@ -254,6 +264,10 @@ param[2] = (uint8_t)param[1];
             set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
             set_cpu_flag(c, NEGATIVE, 0);
             break;
+        //Rotates a memory value one bit to the left
+        //by shifting one bit to the left and setting the MSB
+        //to the bit shifted out
+        //Sets the carry flag to the bit shifted out
         case ROL:
             param[0] = fetch_byte(c);
             set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x80));
@@ -262,6 +276,10 @@ param[2] = (uint8_t)param[1];
             set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
             set_cpu_flag(c, NEGATIVE, c->memory[param[0]] & 0x80);
             break;
+        //Rotates a memory value one bit to the right
+        //by shifting one bit to the right and setting the LSB
+        //to the bit shifted out
+        //Sets the carry flag to the bit shifted out
         case ROR:
             param[0] = fetch_byte(c);
             set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x1));
@@ -300,6 +318,18 @@ param[2] = (uint8_t)param[1];
             set_cpu_flag(c, ZERO, param[0] == 0);
             set_cpu_flag(c, NEGATIVE, (param[0] & 0x80));
             set_cpu_flag(c, OVERFLOW, (param[0] & 0x20));
+            break;
+        //Compares the accumulator to a memory value
+        case CMP:
+            compare(c, c->acc, fetch_byte(c));
+            break;
+        //Compares the x register to a memory value
+        case CPX:
+            compare(c, c->x, fetch_byte(c));
+            break;
+        //Compares the y register to a memory value
+        case CPY:
+            compare(c, c->y, fetch_byte(c));
             break;
         //Branches if the zero flag is not set
         case BNE:

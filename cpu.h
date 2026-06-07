@@ -59,6 +59,11 @@ typedef enum {
     XOR,
     BIT,
 
+    //Compare
+    CMP,
+    CPX,
+    CPY,
+
     //Branch
     BNE,
     BRK,
