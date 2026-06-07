@@ -81,22 +81,22 @@ typedef enum {
     BRK,
     RTI,
 
-    // //Stack
-    // PHA,
-    // PLA,
-    // PHP,
-    // PLP,
-    // TXS,
-    // TSX,
-    //
-    // //Flags
-    // CLC,
-    // SEC,
-    // CLI,
-    // SEI,
-    // CLD,
-    // SED,
-    // CLV,
+    //Stack
+    PHA,
+    PLA,
+    PHP,
+    PLP,
+    TXS,
+    TSX,
+
+    //Flags
+    CLC,
+    SEC,
+    CLI,
+    SEI,
+    CLD,
+    SED,
+    CLV,
 
     NOP,
     STP,

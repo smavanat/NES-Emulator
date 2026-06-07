@@ -402,6 +402,62 @@ void execute_instr(cpu *c, opcode op) {
             c->proc_stat_reg = pull(c);
             pull_pc(c);
             break;
+        //Pushes the accumulator to the stack
+        case PHA:
+            push(c, c->acc);
+            break;
+        //Pulls the accumulator from the stack
+        case PLA:
+            c->acc = pull(c);
+            set_cpu_flag(c, ZERO, c->acc == 0);
+            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            break;
+        //Pushes the status register to the stack
+        case PHP:
+            push(c, c->proc_stat_reg | 0x30);
+            break;
+        //Pulls the status register from the stack
+        case PLP:
+            c->proc_stat_reg = pull(c);
+            break;
+        //Sets the stack pointer to the value of the x register
+        case TXS:
+            c->sp = c->x;
+            break;
+        //Sets the x register to the value of the stack pointer
+        case TSX:
+            c->x = c->sp;
+            set_cpu_flag(c, ZERO, c->x == 0);
+            set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
+            break;
+        //Clears the carry flag
+        case CLC:
+            set_cpu_flag(c, CARRY, 0);
+            break;
+        //Sets the carry flag
+        case SEC:
+            set_cpu_flag(c, CARRY, 1);
+            break;
+        //Clears the interrupt disable flag
+        case CLI:
+            set_cpu_flag(c, INTERRUPT_DISABLE, 0);
+            break;
+        //Sets the interrupt disable flag
+        case SEI:
+            set_cpu_flag(c, INTERRUPT_DISABLE, 1);
+            break;
+        //Clears the decimal flag
+        case CLD:
+            set_cpu_flag(c, DECIMAL, 1);
+            break;
+        //Sets the decimal flag
+        case SED:
+            set_cpu_flag(c, DECIMAL, 0);
+            break;
+        //Clears the overflow flag
+        case CLV:
+            set_cpu_flag(c, OVERFLOW, 0);
+            break;
         //Do nothing. Its in the name
         case NOP:
             break;
