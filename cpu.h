@@ -23,6 +23,22 @@ typedef enum {
 } cpu_flag;
 
 typedef enum {
+    ABSOLUTE,
+    ABSOLUTE_X,
+    ABSOLUTE_Y,
+    ACCUMULATOR,
+    IMMEDIATE,
+    IMPLICIT,
+    INDIRECT,
+    INDIRECT_X,
+    INDIRECT_Y,
+    RELATIVE,
+    ZERO_PAGE,
+    ZERO_PAGE_X,
+    ZERO_PAGE_Y,
+} address_mode;
+
+typedef enum {
     // Load and store
     LDA,
     LDX,
@@ -100,5 +116,31 @@ typedef enum {
 
     NOP,
     STP,
+    SLO,
+    ANC,
+    RLA,
+    SRE,
+    ALR,
+    ARR,
+    RRA,
+    SAX,
+    XAA,
+    AHX,
+    TAS,
+    LAX,
+    LAS,
+    DCP,
+    AXS,
+    ISC,
+    SHX,
+    SHY
 } opcode;
 
+typedef struct {
+    opcode instr;
+    address_mode addr_mode;
+    uint8_t num_cycles;
+} instruction;
+
+//Array holding all of the instructions for the 6502
+extern instruction instructions[256];

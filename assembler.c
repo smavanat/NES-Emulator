@@ -16,16 +16,232 @@ size_t err_line = 0;
 size_t err_col = 0;
 char err_char = 0;
 
-//TODO: Make this into a hashmap
-char *instr[num_instr] = {"LDA", "LDX", "LDY", "STA", "STX", "STY", "TAX", "TXA", "TAY", "TYA", "ADC", "SBC", "INC", "DEC", "INX", "DEX", "INY", "DEY", "ASL", "LSR", "ROL", "ROR", "AND", "ORA", "XOR", "BIT", "CMP", "CPX", "CPY", "BCC", "BCS", "BEQ", "BNE", "BPL", "BMI", "BVC", "BVS", "JMP", "JSR", "RTS", "BRK", "RTI", "PHA", "PLA", "PHP", "PLP", "TXS", "TXS", "CLC", "SEC", "CLI", "SEI", "CLD", "SED", "CLV", "NOP", "STP"};
+//Lookup table to show how many parameters an instruction takes
 uint8_t nparams[num_instr] = {1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
+//Lookup table to map instruction and addressing mode to an opcode
+//0 is used as a placeholder value for no match, so should always check that the instruction
+//is not BRK to determine if it is a true or sentinel value
+uint8_t instr_map[num_instr][13] = {
+    //  ABS  | ABS_X | ABS_Y | ACC | IMM | IMP | IND | IND_X | IND_Y | REL |  ZP  | ZPX | ZPY
+
+    // Load and store
+    { 0xAD, 0xBD, 0xB9,    0, 0xA9,    0,    0, 0xA1, 0xB1,    0, 0xA5, 0xB5,    0 }, // LDA
+    { 0xAE,    0, 0xBE,    0, 0xA2,    0,    0,    0,    0,    0, 0xA6,    0, 0xB6 }, // LDX
+    { 0xAC, 0xBC,    0,    0, 0xA0,    0,    0,    0,    0,    0, 0xA4, 0xB4,    0 }, // LDY
+    { 0x8D, 0x9D, 0x99,    0,    0,    0,    0, 0x81, 0x91,    0, 0x85, 0x95,    0 }, // STA
+    { 0x8E,    0,    0,    0,    0,    0,    0,    0,    0,    0, 0x86,    0, 0x96 }, // STX
+    { 0x8C,    0,    0,    0,    0,    0,    0,    0,    0,    0, 0x84, 0x94,    0 }, // STY
+
+    // Transfer
+    {    0,    0,    0,    0,    0, 0xAA,    0,    0,    0,    0,    0,    0,    0 }, // TAX
+    {    0,    0,    0,    0,    0, 0x8A,    0,    0,    0,    0,    0,    0,    0 }, // TXA
+    {    0,    0,    0,    0,    0, 0xA8,    0,    0,    0,    0,    0,    0,    0 }, // TAY
+    {    0,    0,    0,    0,    0, 0x98,    0,    0,    0,    0,    0,    0,    0 }, // TYA
+
+    // Arithmetic
+    { 0x6D, 0x7D, 0x79,    0, 0x69,    0,    0, 0x61, 0x71,    0, 0x65, 0x75,    0 }, // ADC
+    { 0xED, 0xFD, 0xF9,    0, 0xE9,    0,    0, 0xE1, 0xF1,    0, 0xE5, 0xF5,    0 }, // SBC
+    { 0xEE, 0xFE,    0,    0,    0,    0,    0,    0,    0,    0, 0xE6, 0xF6,    0 }, // INC
+    { 0xCE, 0xDE,    0,    0,    0,    0,    0,    0,    0,    0, 0xC6, 0xD6,    0 }, // DEC
+    {    0,    0,    0,    0,    0, 0xE8,    0,    0,    0,    0,    0,    0,    0 }, // INX
+    {    0,    0,    0,    0,    0, 0xCA,    0,    0,    0,    0,    0,    0,    0 }, // DEX
+    {    0,    0,    0,    0,    0, 0xC8,    0,    0,    0,    0,    0,    0,    0 }, // INY
+    {    0,    0,    0,    0,    0, 0x88,    0,    0,    0,    0,    0,    0,    0 }, // DEY
+
+    // Shift
+    { 0x0E, 0x1E,    0, 0x0A,    0,    0,    0,    0,    0,    0, 0x06, 0x16,    0 }, // ASL
+    { 0x4E, 0x5E,    0, 0x4A,    0,    0,    0,    0,    0,    0, 0x46, 0x56,    0 }, // LSR
+    { 0x2E, 0x3E,    0, 0x2A,    0,    0,    0,    0,    0,    0, 0x26, 0x36,    0 }, // ROL
+    { 0x6E, 0x7E,    0, 0x6A,    0,    0,    0,    0,    0,    0, 0x66, 0x76,    0 }, // ROR
+
+    // Bitwise
+    { 0x2D, 0x3D, 0x39,    0, 0x29,    0,    0, 0x21, 0x31,    0, 0x25, 0x35,    0 }, // AND
+    { 0x0D, 0x1D, 0x19,    0, 0x09,    0,    0, 0x01, 0x11,    0, 0x05, 0x15,    0 }, // ORA
+    { 0x4D, 0x5D, 0x59,    0, 0x49,    0,    0, 0x41, 0x51,    0, 0x45, 0x55,    0 }, // XOR/EOR
+    { 0x2C,    0,    0,    0,    0,    0,    0,    0,    0,    0, 0x24,    0,    0 }, // BIT
+
+    // Compare
+    { 0xCD, 0xDD, 0xD9,    0, 0xC9,    0,    0, 0xC1, 0xD1,    0, 0xC5, 0xD5,    0 }, // CMP
+    { 0xEC,    0,    0,    0, 0xE0,    0,    0,    0,    0,    0, 0xE4,    0,    0 }, // CPX
+    { 0xCC,    0,    0,    0, 0xC0,    0,    0,    0,    0,    0, 0xC4,    0,    0 }, // CPY
+
+    // Branch
+    {    0,    0,    0,    0,    0, 0x90,    0,    0,    0, 0x90,    0,    0,    0 }, // BCC
+    {    0,    0,    0,    0,    0, 0xB0,    0,    0,    0, 0xB0,    0,    0,    0 }, // BCS
+    {    0,    0,    0,    0,    0, 0xF0,    0,    0,    0, 0xF0,    0,    0,    0 }, // BEQ
+    {    0,    0,    0,    0,    0, 0xD0,    0,    0,    0, 0xD0,    0,    0,    0 }, // BNE
+    {    0,    0,    0,    0,    0, 0x10,    0,    0,    0, 0x10,    0,    0,    0 }, // BPL
+    {    0,    0,    0,    0,    0, 0x30,    0,    0,    0, 0x30,    0,    0,    0 }, // BMI
+    {    0,    0,    0,    0,    0, 0x50,    0,    0,    0, 0x50,    0,    0,    0 }, // BVC
+    {    0,    0,    0,    0,    0, 0x70,    0,    0,    0, 0x70,    0,    0,    0 }, // BVS
+
+    // Jump
+    { 0x4C,    0,    0,    0,    0,    0, 0x6C,    0,    0,    0,    0,    0,    0 }, // JMP
+    { 0x20,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 }, // JSR
+    {    0,    0,    0,    0,    0, 0x60,    0,    0,    0,    0,    0,    0,    0 }, // RTS
+    {    0,    0,    0,    0,    0, 0x00,    0,    0,    0,    0,    0,    0,    0 }, // BRK
+    {    0,    0,    0,    0,    0, 0x40,    0,    0,    0,    0,    0,    0,    0 }, // RTI
+
+    // Stack
+    {    0,    0,    0,    0,    0, 0x48,    0,    0,    0,    0,    0,    0,    0 }, // PHA
+    {    0,    0,    0,    0,    0, 0x68,    0,    0,    0,    0,    0,    0,    0 }, // PLA
+    {    0,    0,    0,    0,    0, 0x08,    0,    0,    0,    0,    0,    0,    0 }, // PHP
+    {    0,    0,    0,    0,    0, 0x28,    0,    0,    0,    0,    0,    0,    0 }, // PLP
+    {    0,    0,    0,    0,    0, 0x9A,    0,    0,    0,    0,    0,    0,    0 }, // TXS
+    {    0,    0,    0,    0,    0, 0xBA,    0,    0,    0,    0,    0,    0,    0 }, // TSX
+
+    // Flags
+    {    0,    0,    0,    0,    0, 0x18,    0,    0,    0,    0,    0,    0,    0 }, // CLC
+    {    0,    0,    0,    0,    0, 0x38,    0,    0,    0,    0,    0,    0,    0 }, // SEC
+    {    0,    0,    0,    0,    0, 0x58,    0,    0,    0,    0,    0,    0,    0 }, // CLI
+    {    0,    0,    0,    0,    0, 0x78,    0,    0,    0,    0,    0,    0,    0 }, // SEI
+    {    0,    0,    0,    0,    0, 0xD8,    0,    0,    0,    0,    0,    0,    0 }, // CLD
+    {    0,    0,    0,    0,    0, 0xF8,    0,    0,    0,    0,    0,    0,    0 }, // SED
+    {    0,    0,    0,    0,    0, 0xB8,    0,    0,    0,    0,    0,    0,    0 }, // CLV
+
+    {    0,    0,    0,    0,    0, 0xEA,    0,    0,    0,    0,    0,    0,    0 }, // NOP
+    {    0,    0,    0,    0,    0,    0, 0x12,    0,    0,    0,    0,    0,    0 }, // STP
+};
+
+//A simple hash function for 4 byte strings.
+//This is sufficient for instructions since all opcodes
+//are 3 characters in length, so max 3 bytes
+#define HASH_STR(str) ((uint32_t)(unsigned char)(str)[0] << 16) | ((uint32_t)(unsigned char)(str)[1] << 8) | ((uint32_t)(unsigned char)(str)[2])
+
+//This hash function operates on 3 characters instead of 3 byte strings since apparently strings are not compile time constants but chars are.
+#define HASH(a, b, c) ((uint32_t)(unsigned char)(a) << 16) | ((uint32_t)(unsigned char)(b) << 8) | ((uint32_t)(unsigned char)(c))
+
+//Lookup table to convert (uppercase) opcode strings to integers
+uint8_t lookup_instr(char *instr_str) {
+    switch(HASH_STR(instr_str)) {
+        case HASH('L','D','A'):
+            return LDA;
+        case HASH('L','D','X'):
+            return LDX;
+        case HASH('L','D','Y'):
+            return LDY;
+        case HASH('S','T','A'):
+            return STA;
+        case HASH('S','T','X'):
+            return STX;
+        case HASH('S','T','Y'):
+            return STY;
+        case HASH('T','A','X'):
+            return TAX;
+        case HASH('T','X','A'):
+            return TXA;
+        case HASH('T','A','Y'):
+            return TAY;
+        case HASH('T','Y','A'):
+            return TYA;
+        case HASH('A','D','C'):
+            return ADC;
+        case HASH('S','B','C'):
+            return SBC;
+        case HASH('I','N','C'):
+            return INC;
+        case HASH('D','E','C'):
+            return DEC;
+        case HASH('I','N','X'):
+            return INX;
+        case HASH('D','E','X'):
+            return DEX;
+        case HASH('I','N','Y'):
+            return INY;
+        case HASH('D','E','Y'):
+            return DEY;
+        case HASH('A','S','L'):
+            return ASL;
+        case HASH('L','S','R'):
+            return LSR;
+        case HASH('R','O','L'):
+            return ROL;
+        case HASH('R','O','R'):
+            return ROR;
+        case HASH('A','N','D'):
+            return AND;
+        case HASH('O','R','A'):
+            return ORA;
+        case HASH('X','O','R'):
+            return XOR;
+        case HASH('B','I','T'):
+            return BIT;
+        case HASH('C','M','P'):
+            return CMP;
+        case HASH('C','P','X'):
+            return CPX;
+        case HASH('C','P','Y'):
+            return CPY;
+        case HASH('B','C','C'):
+            return BCC;
+        case HASH('B','C','S'):
+            return BCS;
+        case HASH('B','E','Q'):
+            return BEQ;
+        case HASH('B','N','E'):
+            return BNE;
+        case HASH('B','P','L'):
+            return BPL;
+        case HASH('B','M','I'):
+            return BMI;
+        case HASH('B','V','C'):
+            return BVC;
+        case HASH('B','V','S'):
+            return BVS;
+        case HASH('J','M','P'):
+            return JMP;
+        case HASH('J','S','R'):
+            return JSR;
+        case HASH('R','T','S'):
+            return RTS;
+        case HASH('B','R','K'):
+            return BRK;
+        case HASH('R','T','I'):
+            return RTI;
+        case HASH('P','H','A'):
+            return PHA;
+        case HASH('P','L','A'):
+            return PLA;
+        case HASH('P','H','P'):
+            return PHP;
+        case HASH('P','L','P'):
+            return PLP;
+        case HASH('T','X','S'):
+            return TXS;
+        case HASH('T','S','X'):
+            return TSX;
+        case HASH('C','L','C'):
+            return CLC;
+        case HASH('S','E','C'):
+            return SEC;
+        case HASH('C','L','I'):
+            return CLI;
+        case HASH('S','E','I'):
+            return SEI;
+        case HASH('C','L','D'):
+            return CLD;
+        case HASH('S','E','D'):
+            return SED;
+        case HASH('C','L','V'):
+            return CLV;
+        case HASH('N','O','P'):
+            return NOP;
+        case HASH('S','T','P'):
+            return STP;
+        default:
+            return 0xFF;
+    }
+}
+
+//Writes text into an output file
 void write_text(char *text, size_t len) {
     FILE *fptr = fopen("output.txt", "w");
     fwrite(text, sizeof(char), len, fptr);
     fclose(fptr);
 }
 
+//Reads the entirety of a file into the given buffer
 int read_to_end(char const *path, char **buf, uint8_t add_null) {
     FILE *fp;
     size_t fsz;
@@ -89,6 +305,12 @@ typedef enum {
     assembler_nl,
     assembler_dec,
     assembler_string,
+    assembler_lparen,
+    assembler_rparen,
+    assembler_x,
+    assembler_y,
+    assembler_a,
+    assembler_comma,
     assembler_none
 } assembler_token_type;
 
@@ -104,6 +326,7 @@ typedef struct {
     assembler_token *tokens;
     size_t len;
     size_t capacity;
+    uint8_t open_bracket; //For determining if the current expression is inside parentheses. Do not need anything more complex as there should not be nested parentheses
 } lexer;
 
 //Returns a string equivalent for each token type
@@ -127,6 +350,18 @@ char *token_type_string(assembler_token_type type) {
             return "IMM";
         case assembler_nl:
             return "NEWLINE";
+        case assembler_lparen:
+            return "LPAREN";
+        case assembler_rparen:
+            return "RPAREN";
+        case assembler_x:
+            return "X";
+        case assembler_y:
+            return "Y";
+        case assembler_a:
+            return "A";
+        case assembler_comma:
+            return "COMMA";
         default:
             return "NONE";
     }
@@ -205,8 +440,8 @@ uint8_t consume(char *buf, lexer *l, size_t *i, size_t *curr_col, size_t curr_li
         curr_len++;
     }
 
-    //If the char after the label is not blank, we may have an error
-    if(buf[(*i)] != ' ' && buf[(*i)] != '\n' && buf[(*i)] != '\t' && buf[(*i)] != '/') {
+    //If the char after the label is not blank or a closed bracket, we may have an error
+    if(buf[(*i)] != ' ' && buf[(*i)] != '\n' && buf[(*i)] != '\t' && buf[(*i)] != '/' && buf[(*i)] != ')' && buf[(*i)] != ',') {
         err_col = start_col+curr_len;
         err_line = curr_line;
         err_char = buf[(*i)];
@@ -225,20 +460,42 @@ uint8_t consume(char *buf, lexer *l, size_t *i, size_t *curr_col, size_t curr_li
     //If the given token is an opcode token we need to determine what
     //kind of opcode it is by looking it up in the lookup table
     if(type == assembler_opcode) {
-        for(size_t j = 0; j < curr_len; j++) {
-            lex_buf[j] = toupper(lex_buf[j]);
-        }
-        lex_buf[curr_len] = '\0';
-
-        for(size_t j = 0; j < num_instr; j++) {
-            if(!strcmp(lex_buf, instr[j])) {
-                tok.type = nparams[j] == 0 ? assembler_opcode0 : assembler_opcode1;
-                break;
+        //Could a string for addressing
+        if(curr_len == 1) {
+            switch(toupper(lex_buf[0])) {
+                //X register
+                case 'X':
+                    tok.type = assembler_x;
+                    break;
+                //Y register
+                case 'Y':
+                    tok.type = assembler_y;
+                    break;
+                //Accumulator
+                case 'A':
+                    tok.type = assembler_a;
+                    break;
+                //Otherwise just a regular string
+                default:
+                    tok.type = assembler_string;
+                    break;
             }
         }
+        //Otherwise need to look it up
+        else {
+            for(size_t j = 0; j < curr_len; j++) {
+                lex_buf[j] = toupper(lex_buf[j]);
+            }
+            lex_buf[curr_len] = '\0';
 
-        //If it does not match any of the opcode names then it must be a string name for a variable/label
-        if(tok.type == assembler_opcode) tok.type = assembler_string;
+            uint8_t mapping = lookup_instr(lex_buf);
+            if(mapping != 0xFF) {
+                tok.type = nparams[mapping] == 0 ? assembler_opcode0 : assembler_opcode1;
+            }
+
+            //If it does not match any of the opcode names then it must be a string name for a variable/label
+            if(tok.type == assembler_opcode) tok.type = assembler_string;
+        }
     }
     append_token(l, tok); //Add the token to the lexer
 
@@ -299,7 +556,7 @@ int tokenise(char *buf, size_t len, lexer *l) {
                         return 1;
                     }
                     else {
-                        assembler_token tok = {
+                       assembler_token tok = {
                             .type = assembler_imm,
                             .column = curr_col,
                             .line = curr_line,
@@ -373,6 +630,59 @@ int tokenise(char *buf, size_t len, lexer *l) {
                         err_char = '/';
                         return 1;
                     }
+                    break;
+                case '(':
+                    if(expected_type != assembler_none) {
+                        err_col = curr_col;
+                        err_line = curr_line;
+                        err_char = '(';
+                        return 1;
+                    }
+                    else {
+                       assembler_token tok = {
+                            .type = assembler_lparen,
+                            .column = curr_col,
+                            .line = curr_line,
+                            .len = 1,
+                            .lexeme = "("
+                        };
+                        append_token(l, tok);
+                        l->open_bracket = 1;
+
+                        expected_type = assembler_none;
+                    }
+                    break;
+                case ')':
+                    if(!l->open_bracket) {
+                        err_col = curr_col;
+                        err_line = curr_line;
+                        err_char = ')';
+                        return 1;
+                    }
+                    else {
+                       assembler_token tok = {
+                            .type = assembler_rparen,
+                            .column = curr_col,
+                            .line = curr_line,
+                            .len = 1,
+                            .lexeme = ")"
+                        };
+                        append_token(l, tok);
+                        l->open_bracket = 0;
+
+                        expected_type = assembler_none;
+                    }
+                    break;
+                case ',':
+                    append_token(l, (assembler_token){
+                        .type = assembler_rparen,
+                        .column = curr_col,
+                        .line = curr_line,
+                        .len = 1,
+                        .lexeme = ","
+                    });
+                    expected_type = assembler_none;
+                    break;
                 //Usupported char
                 default:
                     err_col = curr_col;
@@ -422,9 +732,15 @@ uint32_t parse_hex(char *str, size_t len) {
 }
 
 //Parses a series of tokens into a byte string that is the output of the assembler
-//Currently only three valid grammar productions:
+//Current valid grammar productions:
 //      OPCODE0 NEWLINE
 //      OPCODE1 (DECIMAL|HEXADECIMAL|BINARY) NEWLINE
+//      OPCODE1 LPAREN (DECIMAL|HEXADECIMAL|BINARY) RPAREN NEWLINE
+//      OPCODE1 (DECIMAL|HEXADECIMAL|BINARY) X NEWLINE
+//      OPCODE1 (DECIMAL|HEXADECIMAL|BINARY) Y NEWLINE
+//      OPCODE1 A NEWLINE
+//      OPCODE1 LPAREN (DECIMAL|HEXADECIMAL|BINARY) COMMA X RPAREN NEWLINE
+//      OPCODE1 LPAREN (DECIMAL|HEXADECIMAL|BINARY) RPAREN COMMA Y NEWLINE
 //      OPCODE1 IMM (DECIMAL|HEXADECIMAL|BINARY) NEWLINE
 //
 //If everything is correct, it will return the length of the output buffer
@@ -449,12 +765,7 @@ int parse(lexer *l, char *out) {
             case assembler_nl:
                 if(tok.type == assembler_opcode0 || tok.type == assembler_opcode1) {
                     //Lookup the opcode binary encoding
-                    for(size_t j = 0; j < num_instr; j++) {
-                        if(!strcmp(tok.lexeme, instr[j])) {
-                            out[ch_ptr++] = j;
-                            break;
-                        }
-                    }
+                    out[ch_ptr++] = lookup_instr(tok.lexeme);
                 }
                 //If the opcode somehow doesn't exist
                 else if(tok.type != assembler_nl) {
