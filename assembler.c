@@ -101,7 +101,7 @@ uint8_t instr_map[num_instr][13] = {
     {    0,    0,    0,    0,    0, 0xB8,    0,    0,    0,    0,    0,    0,    0 }, // CLV
 
     {    0,    0,    0,    0,    0, 0xEA,    0,    0,    0,    0,    0,    0,    0 }, // NOP
-    {    0,    0,    0,    0,    0,    0, 0x12,    0,    0,    0,    0,    0,    0 }, // STP
+    {    0,    0,    0,    0,    0, 0x12,    0,    0,    0,    0,    0,    0,    0 }, // STP
 };
 
 //A simple hash function for 4 byte strings.
@@ -675,7 +675,7 @@ int tokenise(char *buf, size_t len, lexer *l) {
                     break;
                 case ',':
                     append_token(l, (assembler_token){
-                        .type = assembler_rparen,
+                        .type = assembler_comma,
                         .column = curr_col,
                         .line = curr_line,
                         .len = 1,
@@ -731,86 +731,138 @@ uint32_t parse_hex(char *str, size_t len) {
     return ret;
 }
 
-//Parses a series of tokens into a byte string that is the output of the assembler
+uint32_t parse_number(char *str, size_t len, assembler_token_type type) {
+    switch(type) {
+        case assembler_dec:
+            return parse_dec(str, len);
+        case assembler_hex:
+            return parse_hex(str, len);
+        case assembler_binary:
+            return parse_binary(str, len);
+        default:
+            return 65536;
+    }
+}
+
+//Checks if a sequence of tokens parsed on a line matches a valid grammar production
 //Current valid grammar productions:
-//      OPCODE0 NEWLINE
-//      OPCODE1 (DECIMAL|HEXADECIMAL|BINARY) NEWLINE
-//      OPCODE1 LPAREN (DECIMAL|HEXADECIMAL|BINARY) RPAREN NEWLINE
-//      OPCODE1 (DECIMAL|HEXADECIMAL|BINARY) X NEWLINE
-//      OPCODE1 (DECIMAL|HEXADECIMAL|BINARY) Y NEWLINE
-//      OPCODE1 A NEWLINE
-//      OPCODE1 LPAREN (DECIMAL|HEXADECIMAL|BINARY) COMMA X RPAREN NEWLINE
-//      OPCODE1 LPAREN (DECIMAL|HEXADECIMAL|BINARY) RPAREN COMMA Y NEWLINE
-//      OPCODE1 IMM (DECIMAL|HEXADECIMAL|BINARY) NEWLINE
-//
+//  (1) OPCODE0 NEWLINE
+//  (2) OPCODE1 A NEWLINE
+//  (3) OPCODE1 (DECIMAL|HEXADECIMAL|BINARY) NEWLINE
+//  (6) OPCODE1 IMM (DECIMAL|HEXADECIMAL|BINARY) NEWLINE
+//  (4) OPCODE1 (DECIMAL|HEXADECIMAL|BINARY) COMMA X NEWLINE
+//  (5) OPCODE1 (DECIMAL|HEXADECIMAL|BINARY) COMMA Y NEWLINE
+//  (7) OPCODE1 LPAREN (DECIMAL|HEXADECIMAL|BINARY) RPAREN NEWLINE
+//  (8) OPCODE1 LPAREN (DECIMAL|HEXADECIMAL|BINARY) COMMA X RPAREN NEWLINE
+//  (9) OPCODE1 LPAREN (DECIMAL|HEXADECIMAL|BINARY) RPAREN COMMA Y NEWLINE
+//Returns 0 if no production matches
+uint8_t match_production(assembler_token_type *tokens, size_t len) {
+    #define token_is_number(token) ((token) == assembler_hex || (token) == assembler_binary || (token) == assembler_dec)
+
+    switch (len) {
+        case 1:
+            if(tokens[0] == assembler_opcode0) return 1;
+            break;
+        case 2:
+            if(tokens[0] == assembler_opcode1 && tokens[1] == assembler_a) return 2;
+            if(tokens[0] == assembler_opcode1 && token_is_number(tokens[1])) return 3;
+            break;
+        case 3:
+            if(tokens[0] == assembler_opcode1 && tokens[1] == assembler_imm && token_is_number(tokens[2])) return 4;
+            break;
+        case 4:
+            if(tokens[0] == assembler_opcode1 && token_is_number(tokens[1]) && tokens[3] == assembler_x) return 5;
+            if(tokens[0] == assembler_opcode1 && token_is_number(tokens[1]) && tokens[3] == assembler_y) return 6;
+            if(tokens[0] == assembler_opcode1 && tokens[1] == assembler_lparen && token_is_number(tokens[2]) && tokens[3] == assembler_rparen) return 7;
+            break;
+        case 6:
+            if(tokens[0] == assembler_opcode1 && tokens[1] == assembler_lparen && token_is_number(tokens[2])
+            && tokens[3] == assembler_comma && tokens[4] == assembler_x && tokens[5] == assembler_rparen) return 8;
+            if(tokens[0] == assembler_opcode1 && tokens[1] == assembler_lparen && token_is_number(tokens[2])
+            && tokens[3] == assembler_rparen && tokens[4] == assembler_comma && tokens[5] == assembler_y) return 9;
+            break;
+    }
+    return 0;
+}
+
+//Parses a series of tokens into a byte string that is the output of the assembler
 //If everything is correct, it will return the length of the output buffer
 //Otherwise it can return one of 4 error codes as negative values:
-//  1: Nonexistent opcode
-//  2: Invalid opcode parameter
-//  3: Parameter is too large (> 65535)
-//  4: Unexpected token
+//  1: Invalid Production
+//  2: Invalid opcode/address mode combination
+//  3: Numerical value out of range
 int parse(lexer *l, char *out) {
-    assembler_token_type previous_type = assembler_none; //Intially assume no previous token
-
     size_t i = 0;
-    int ch_ptr = 0; //Pointer into the output array
-    uint32_t res = 0; //Stores any intermediate values computed in assembly
+    int ch_ptr = 0;
+    size_t buf_sz = 0;
+    assembler_token_type tok_buf[8];
+    uint32_t param = 0;
 
-    //Loop compares current a previous tokens to see if they match any productions
     while(i < l->len) {
-        assembler_token tok = l->tokens[i];
-        switch(previous_type) {
-            //If at the start of a line, first token must be an opcode
-            case assembler_none:
-            case assembler_nl:
-                if(tok.type == assembler_opcode0 || tok.type == assembler_opcode1) {
-                    //Lookup the opcode binary encoding
-                    out[ch_ptr++] = lookup_instr(tok.lexeme);
+        for(buf_sz = 0; buf_sz < 8; buf_sz++) {
+            if(i + buf_sz >= l->len || l->tokens[i+buf_sz].type == assembler_nl) break;
+            tok_buf[buf_sz] = l->tokens[i + buf_sz].type;
+        }
+
+        switch(match_production(tok_buf, buf_sz)) {
+            //Invalid production
+            case 0:
+                return -1;
+            case 1:
+                out[ch_ptr++] = instr_map[lookup_instr(l->tokens[i].lexeme)][IMPLICIT];
+                if(out[ch_ptr-1] == 0 && lookup_instr(l->tokens[i].lexeme) != BRK) return -2;
+                break;
+            case 2:
+                out[ch_ptr++] = instr_map[lookup_instr(l->tokens[i].lexeme)][ACCUMULATOR];
+                if(out[ch_ptr-1] == 0) return -2;
+                break;
+            case 3:
+            case 5:
+            case 6:
+                param = parse_number(l->tokens[i+1].lexeme, l->tokens[i+1].len, l->tokens[i+1].type);
+                if(param >= MEMORY_SIZE) return -3;
+                if(param > 255) {
+                    if(buf_sz == 2) out[ch_ptr++] = instr_map[lookup_instr(l->tokens[i].lexeme)][ABSOLUTE];
+                    else out[ch_ptr++] = instr_map[lookup_instr(l->tokens[i].lexeme)][(l->tokens[i+2].type == assembler_x) ? ABSOLUTE_X : ABSOLUTE_Y];
+                    if(out[ch_ptr-1] == 0) return -2;
+
+                    //Need to split it into two bytes if too large
+                    out[ch_ptr++] = (uint8_t)(param & 0xFF);
+                    out[ch_ptr++] = (uint8_t)((param & 0xFF00) >> 8);
                 }
-                //If the opcode somehow doesn't exist
-                else if(tok.type != assembler_nl) {
-                    return -1;
-                }
-            break;
-            //Assembling the argument for an opcode
-            case assembler_imm:
-            case assembler_opcode1:
-                switch(tok.type) {
-                    case assembler_dec:
-                        res = parse_dec(tok.lexeme, tok.len);
-                        break;
-                    case assembler_hex:
-                        res = parse_hex(tok.lexeme, tok.len);
-                        break;
-                    case assembler_binary:
-                        res = parse_binary(tok.lexeme, tok.len);
-                        break;
-                    case assembler_imm:
-                        if(previous_type == assembler_imm) return -2;
-                        break;
-                    default:
-                        //Invalid operand
-                        return -2;
-                }
-                if(tok.type != assembler_imm) {
-                    //If we have too large of a memory value
-                    if(res > MEMORY_SIZE - 1) return -3;
-                    else if(res > 255) {
-                        //Need to split it into two bytes if too large
-                        out[ch_ptr++] = (uint8_t)(res & 0xFF);
-                        out[ch_ptr++] = (uint8_t)((res & 0xFF00) >> 8);
-                    }
-                    else {
-                        out[ch_ptr++] = (uint8_t)(res & 0xFF);
-                    }
+                else {
+                    if(buf_sz == 2) out[ch_ptr++] = instr_map[lookup_instr(l->tokens[i].lexeme)][ZERO_PAGE];
+                    else out[ch_ptr++] = instr_map[lookup_instr(l->tokens[i].lexeme)][(l->tokens[i+2].type == assembler_x) ? ZERO_PAGE_X : ZERO_PAGE_Y];
+                    if(out[ch_ptr-1] == 0) return -2;
+                    out[ch_ptr++] = (uint8_t)(param & 0xFF);
                 }
                 break;
-            default:
-                //Unexpected token
-                if(tok.type != assembler_nl) return -4;
+            case 4:
+                param = parse_number(l->tokens[i+2].lexeme, l->tokens[i+2].len, l->tokens[i+2].type);
+                if(param > 255) return -3;
+                out[ch_ptr++] = instr_map[lookup_instr(l->tokens[i].lexeme)][IMMEDIATE];
+                if(out[ch_ptr-1] == 0 && lookup_instr(l->tokens[i].lexeme)!= BRK) return -2;
+                out[ch_ptr++] = (uint8_t)(param & 0xFF);
+                break;
+            case 7:
+                if(lookup_instr(l->tokens[i].lexeme) != JMP) return -2;
+                param = parse_number(l->tokens[i+2].lexeme, l->tokens[i+2].len, l->tokens[i+2].type);
+                out[ch_ptr++] = instr_map[lookup_instr(l->tokens[i].lexeme)][INDIRECT];
+
+                //Need to split it into two bytes if too large
+                out[ch_ptr++] = (uint8_t)(param & 0xFF);
+                out[ch_ptr++] = (uint8_t)((param & 0xFF00) >> 8);
+                break;
+            case 8:
+            case 9:
+                param = parse_number(l->tokens[i+2].lexeme, l->tokens[i+2].len, l->tokens[i+2].type);
+                if(param > 255) return -3;
+                out[ch_ptr++] = instr_map[lookup_instr(l->tokens[i].lexeme)][(l->tokens[i+4].type == assembler_x) ? INDIRECT_X : INDIRECT_Y];
+                if(out[ch_ptr-1] == 0) return -2;
+                out[ch_ptr++] = (uint8_t)(param & 0xFF);
         }
-        previous_type = tok.type;
-        i++;
+
+        i += buf_sz+1;
     }
 
     return ch_ptr;
