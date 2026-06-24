@@ -3,7 +3,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "bus.h"
 #include "cpu.h"
+
+//TODO: IMPLEMENT UNOFFICIAL OPCODES
 
 uint8_t stop = 0;
 
@@ -344,7 +347,8 @@ int read_to_end(char const *path, char **buf, uint8_t add_null) {
 
 //Returns the value of the byte at pc and increments pc
 uint8_t fetch_byte(cpu *c) {
-    return c->memory[c->pc++];
+    return mem_read(c->b, c->pc++);
+    // return c->memory[c->pc++];
 }
 
 //Gets the value of the given cpu flag
@@ -369,14 +373,16 @@ void branch(cpu *c, uint8_t expr) {
 
 //Pushes a value onto the stack and decrements sp
 void push(cpu* c, uint8_t val) {
-    c->memory[0x100 + c->sp] = val;
+    // c->memory[0x100 + c->sp] = val;
+    mem_write(c->b, 0x100 + c->sp, val);
     c->sp--;
 }
 
 //Pops the top value off of the stack and increments sp
 uint8_t pull(cpu *c) {
     c->sp++;
-    return c->memory[0x100 + c->sp];
+    // return c->memory[0x100 + c->sp];
+    return mem_read(c->b, 0x100 + c->sp);
 }
 
 //Pushes the pc to the stack, in the order: high byte, low byte
@@ -398,7 +404,11 @@ void pull_pc(cpu *c) {
 
 //Sets the pc to the little endian 2 byte value stored at the given address and its successor
 void set_pc(cpu *c, uint16_t addr) {
-    c->pc = (((uint16_t)c->memory[addr+1]) << 8) | c->memory[addr];
+    // c->pc = (((uint16_t)c->memory[addr+1]) << 8) | c->memory[addr];
+    uint8_t lo = mem_read(c->b, addr);
+    uint8_t hi = mem_read(c->b, addr+1);
+
+    c->pc = (((uint16_t)hi) << 8) | lo;
 }
 
 uint16_t get_addr(cpu *c) {
@@ -409,7 +419,12 @@ uint16_t get_addr(cpu *c) {
 }
 
 uint16_t get_indirect_add(cpu *c, uint8_t start) {
-    return (((uint16_t)c->memory[start+1]) << 8) | c->memory[start];
+    // return (((uint16_t)c->memory[start+1]) << 8) | c->memory[start];
+
+    uint8_t lo = mem_read(c->b, start);
+    uint8_t hi = mem_read(c->b, start+1);
+
+    return (((uint16_t)hi) << 8) | lo;
 }
 
 void compare(cpu *c, uint8_t v1, uint8_t v2) {
@@ -418,8 +433,9 @@ void compare(cpu *c, uint8_t v1, uint8_t v2) {
     set_cpu_flag(c, NEGATIVE, (v1 - v2) & 0x80);
 }
 
-//TODO: See if we should return the address or the value at the address
-//      Could return a UNION type to allow for the fact that it could be an address or a value
+//Gets the argument for an instruction.
+//get_val determines whether the returned paramter should be a memory
+//address or a value
 uint16_t get_argument(cpu *c, address_mode mode, uint8_t get_val) {
     uint16_t addr = 0;
     switch(mode) {
@@ -441,16 +457,19 @@ uint16_t get_argument(cpu *c, address_mode mode, uint8_t get_val) {
         case INDIRECT:
         {
             uint16_t ptr = get_addr(c);
-            addr = c->memory[ptr] | (c->memory[ptr+1] << 8);
+            // addr = c->memory[ptr] | (c->memory[ptr+1] << 8);
+            addr = mem_read(c->b, ptr) | (mem_read(c->b, ptr+1) << 8);
         }
             break;
         case INDIRECT_X:
             addr = (fetch_byte(c) + c ->x) % 256;
-            addr = (((uint16_t)c->memory[(addr+1)%256]) << 8) | c->memory[addr];
+            // addr = (((uint16_t)c->memory[(addr+1)%256]) << 8) | c->memory[addr];
+            addr = (((uint16_t)mem_read(c->b, (addr+1)%256)) << 8) | mem_read(c->b, addr);
             break;
         case INDIRECT_Y:
             addr = fetch_byte(c);
-            addr = (((uint16_t)c->memory[(addr+1)%256]) << 8) | c->memory[addr];
+            // addr = (((uint16_t)c->memory[(addr+1)%256]) << 8) | c->memory[addr];
+            addr = (((uint16_t)mem_read(c->b, (addr+1)%256)) << 8) | mem_read(c->b, addr);
             addr += c->y;
             break;
         case RELATIVE:
@@ -467,13 +486,13 @@ uint16_t get_argument(cpu *c, address_mode mode, uint8_t get_val) {
             break;
     }
 
-    return get_val ? c->memory[addr] : addr;
+    // return get_val ? c->memory[addr] : addr;
+    return get_val ? mem_read(c->b, addr) : addr;
 }
 
 void execute_instr(cpu *c, uint8_t op) {
     instruction instr = instructions[op];
-    uint16_t param[4]; //Sticking with immediate mode addressing for all instructions for now
-    // param[0] = get_argument(c, instr.addr_mode);
+    uint16_t param[4];
 
     switch(instr.instr) {
         //Loads value from memory address into accumulator
@@ -496,15 +515,18 @@ void execute_instr(cpu *c, uint8_t op) {
             break;
         //Stores the value in the accumulator at the given memory address
         case STA:
-            c->memory[get_argument(c, instr.addr_mode, 0)] = c->acc;
+            // c->memory[get_argument(c, instr.addr_mode, 0)] = c->acc;
+            mem_write(c->b, get_argument(c, instr.addr_mode, 0), c->acc);
             break;
         //Stores the value in the x register at the given memory address
         case STX:
-            c->memory[get_argument(c, instr.addr_mode, 0)] = c->x;
+            // c->memory[get_argument(c, instr.addr_mode, 0)] = c->x;
+            mem_write(c->b, get_argument(c, instr.addr_mode, 0), c->x);
             break;
         //Stores the value in the y register at the given memory address
         case STY:
-            c->memory[get_argument(c, instr.addr_mode, 0)] = c->y;
+            // c->memory[get_argument(c, instr.addr_mode, 0)] = c->y;
+            mem_write(c->b, get_argument(c, instr.addr_mode, 0), c->y);
             break;
         //Transfers accumulator value into x register;
         case TAX:
@@ -559,16 +581,22 @@ void execute_instr(cpu *c, uint8_t op) {
         //Increments a given memory value by 1
         case INC:
             param[0] = get_argument(c, instr.addr_mode, 0);
-            c->memory[param[0]]++;
-            set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
-            set_cpu_flag(c, NEGATIVE, (c->memory[param[0]] & 0x80));
+            // c->memory[param[0]]++;
+            mem_write(c->b, param[0], mem_read(c->b, param[0])+1);
+            // set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
+            // set_cpu_flag(c, NEGATIVE, (c->memory[param[0]] & 0x80));
+            set_cpu_flag(c, ZERO, mem_read(c->b, param[0]) == 0);
+            set_cpu_flag(c, NEGATIVE, mem_read(c->b, param[0]) & 0x80);
             break;
         //Decrements a given memory value by 1
         case DEC:
             param[0] = get_argument(c, instr.addr_mode, 0);
-            c->memory[param[0]]--;
-            set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
-            set_cpu_flag(c, NEGATIVE, (c->memory[param[0]] & 0x80));
+            // c->memory[param[0]]--;
+            mem_write(c->b, param[0], mem_read(c->b, param[0])-1);
+            // set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
+            // set_cpu_flag(c, NEGATIVE, (c->memory[param[0]] & 0x80));
+            set_cpu_flag(c, ZERO, mem_read(c->b, param[0]) == 0);
+            set_cpu_flag(c, NEGATIVE, mem_read(c->b, param[0]) & 0x80);
             break;
         //Increments the value in the x register by 1
         case INX:
@@ -605,10 +633,14 @@ void execute_instr(cpu *c, uint8_t op) {
             }
             else {
                 param[0] = get_argument(c, instr.addr_mode, 0);
-                set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x80));
-                c->memory[param[0]] <<= 1;
-                set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
-                set_cpu_flag(c, NEGATIVE, c->memory[param[0]] & 0x80);
+                // set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x80));
+                set_cpu_flag(c, CARRY, mem_read(c->b, param[0]) & 0x80);
+                // c->memory[param[0]] <<= 1;
+                mem_write(c->b, param[0], mem_read(c->b, param[0]) << 1);
+                // set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
+                // set_cpu_flag(c, NEGATIVE, c->memory[param[0]] & 0x80);
+                set_cpu_flag(c, ZERO, mem_read(c->b, param[0]) == 0);
+                set_cpu_flag(c, NEGATIVE, mem_read(c->b, param[0]) & 0x80);
             }
             break;
         //Shifts a memory value one bit to the right,
@@ -622,9 +654,12 @@ void execute_instr(cpu *c, uint8_t op) {
             }
             else {
                 param[0] = get_argument(c, instr.addr_mode, 0);
-                set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x1));
-                c->memory[param[0]] >>= 1;
-                set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
+                // set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x1));
+                set_cpu_flag(c, CARRY, mem_read(c->b, param[0]) & 0x1);
+                // c->memory[param[0]] >>= 1;
+                mem_write(c->b, param[0], mem_read(c->b, param[0]) >> 1);
+                // set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
+                set_cpu_flag(c, ZERO, mem_read(c->b, param[0]) == 0);
                 set_cpu_flag(c, NEGATIVE, 0);
             }
             break;
@@ -644,11 +679,16 @@ void execute_instr(cpu *c, uint8_t op) {
             else {
                 param[0] = get_argument(c, instr.addr_mode, 0);
                 uint8_t old_carry = get_cpu_flag(c, CARRY);
-                set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x80));
-                c->memory[param[0]] <<= 1;
-                c->memory[param[0]] |= old_carry;
-                set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
-                set_cpu_flag(c, NEGATIVE, c->memory[param[0]] & 0x80);
+                // set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x80));
+                set_cpu_flag(c, CARRY, mem_read(c->b, param[0]) & 0x80);
+                // c->memory[param[0]] <<= 1;
+                // c->memory[param[0]] |= old_carry;
+                mem_write(c->b, param[0], mem_read(c->b, param[0]) << 1);
+                mem_write(c->b, param[0], mem_read(c->b, param[0]) | old_carry);
+                // set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
+                // set_cpu_flag(c, NEGATIVE, c->memory[param[0]] & 0x80);
+                set_cpu_flag(c, ZERO, mem_read(c->b, param[0]) == 0);
+                set_cpu_flag(c, NEGATIVE, mem_read(c->b, param[0]) & 0x80);
             }
             break;
         //Rotates a memory value one bit to the right
@@ -667,11 +707,16 @@ void execute_instr(cpu *c, uint8_t op) {
             else {
                 param[0] = get_argument(c, instr.addr_mode, 0);
                 uint8_t old_carry = get_cpu_flag(c, CARRY);
-                set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x1));
-                c->memory[param[0]] >>= 1;
-                c->memory[param[0]] |= (old_carry << 7);
-                set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
-                set_cpu_flag(c, NEGATIVE, c->memory[param[0]] & 0x80);
+                // set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x1));
+                set_cpu_flag(c, CARRY, mem_read(c->b, param[0]) & 0x1);
+                // c->memory[param[0]] >>= 1;
+                // c->memory[param[0]] |= (old_carry << 7);
+                mem_write(c->b, param[0], mem_read(c->b, param[0]) >> 1);
+                mem_write(c->b, param[0], mem_read(c->b, param[0]) | (old_carry << 7));
+                // set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
+                // set_cpu_flag(c, NEGATIVE, c->memory[param[0]] & 0x80);
+                set_cpu_flag(c, ZERO, mem_read(c->b, param[0]) == 0);
+                set_cpu_flag(c, NEGATIVE, mem_read(c->b, param[0]) & 0x80);
             }
             break;
         //Ands the value in the accumulator and some memory value
@@ -865,7 +910,8 @@ void print_cpu_state(cpu *c) {
 void print_stack(cpu *c) {
     printf("Addr    Val\n");
     for(int i = c->sp+1; i < 256; i++) {
-        printf(" %03X     %02X\n", 0x100 + i, c->memory[0x100 + i]);
+        // printf(" %03X     %02X\n", 0x100 + i, c->memory[0x100 + i]);
+        printf(" %03X     %02X\n", 0x100 + i, mem_read(c->b, 0x100 + i));
     }
 }
 
@@ -875,7 +921,8 @@ void print_page(cpu *c, uint8_t page_num) {
 
     for(int i = 0; i < 256; i++) {
         if(i > 0 && i % 16 == 0) printf("\n");
-        printf("%02X ", c->memory[start_addr+i]);
+        // printf("%02x ", c->memory[start_addr+i]);
+        printf("%02x ", mem_read(c->b, start_addr+i));
     }
     printf("\n");
 }
@@ -892,7 +939,8 @@ int main(void) {
         fprintf(stderr, "Error when opening a file\n");
         return 0;
     }
-    memcpy(&c.memory[0x8000], buf, sz);
+    // memcpy(&c.memory[0x8000], buf, sz);
+    rom_load(c.b->rom, buf, sz);
     c.pc = 0x8000;
 
     // for(int i = 0; i < sz; i++) {
@@ -902,7 +950,8 @@ int main(void) {
     while(stop == 0) {
         uint8_t instr = fetch_byte(&c);
         execute_instr(&c, instr);
-        printf("0x02: %02X, 0x03: %02X\n", c.memory[0x02], c.memory[0x03]);
+        // printf("0x02: %02X, 0x03: %02X\n", c.memory[0x02], c.memory[0x03]);
+        printf("0x02: %02X, 0x03: %02X\n", mem_read(c.b, (0x02)), mem_read(c.b, (0x03)));
     }
     print_cpu_state(&c);
     print_stack(&c);

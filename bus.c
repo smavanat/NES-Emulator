@@ -1,0 +1,121 @@
+#include "bus.h"
+#include "ppu.h"
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+uint8_t mem_read(bus *b, uint16_t addr) {
+    if(addr <= RAM_MIRRORS_END) {
+        uint16_t mirror_down_addr = addr & 0x7FF;
+        return b->cpu_vram[mirror_down_addr];
+    }
+    else if(addr < 0x2008 || addr == 0x4014) {
+        switch (addr) {
+            case 0x2002:
+                return b->p->status_reg;
+            case 0x2004:
+                return b->p->oamdata_reg;
+            case 0x2007:
+                return ppu_read_data(b->p);
+            default:
+                fprintf(stderr, "ERROR: Attempting to read from write only PPU register at address: %hu", addr);
+        }
+    }
+    else if(addr <= PPU_REGISTERS_MIRRORS_END) {
+        uint16_t mirror_down_addr = addr & 0x2007;
+        return mem_read(b, mirror_down_addr);
+    }
+    else if(addr >= 0x8000 && addr <= 0xFFFF) {
+        addr -= 0x8000;
+        if(b->rom->prg_rom_sz == 0x4000 && addr >= 0x4000) addr = addr % 0x4000;
+        return b->rom->prg_rom[addr];
+    }
+    else {
+        printf("Ignoring memory access at %hu\n", addr);
+    }
+
+    return 0;
+}
+
+void mem_write(bus *b, uint16_t addr, uint8_t val) {
+    if(addr <= RAM_MIRRORS_END) {
+        uint16_t mirror_down_addr = addr & 0x7FF;
+        b->cpu_vram[mirror_down_addr] = val;
+    }
+    else if(addr < 0x2008 || addr == 0x4014) {
+        switch(addr) {
+            case 0x2000:
+                b->p->ctrl_reg = val;
+            break;
+            case 0x2001:
+                b->p->mask_reg = val;
+            break;
+            case 0x2003:
+                b->p->oamaddr_reg = val;
+            break;
+            case 0x2004:
+                b->p->oamdata_reg = val;
+            break;
+            case 0x2006:
+                update_addr_register(b->p->addr_reg, val);
+            break;
+            //TODO: FIX THIS
+            case 0x2007:
+                b->p->data_reg = val;
+            break;
+            case 0x4014:
+                b->p->oamdma_reg = val;
+            break;
+            default:
+                fprintf(stderr, "Attempting to write to read-only PPU register at address %hu\n", addr);
+        }
+    }
+    else if(addr <= PPU_REGISTERS_MIRRORS_END) {
+        uint16_t mirror_down_addr = addr & 0x2007;
+        mem_write(b, mirror_down_addr, val);
+    }
+    else if(addr >= 0x8000 && addr <= 0xFFFF) {
+        fprintf(stderr, "ERROR: Attempting to write to cartridge ROM\n");
+    }
+    else {
+        printf("Ignoring memory write-access at %hu\n", addr);
+    }
+}
+
+//TODO: Add support for NES2.0
+int rom_load(rom *r, char *buf, int buf_len) {
+    if(buf_len < 16) {
+        fprintf(stderr, "ROM is too small to contain an iNES header\n");
+        return 1;
+    }
+
+    if(buf[0] != 'N' || buf[1] != 'E' || buf[2] != 'S' || buf[3] != 0x1A) {
+        fprintf(stderr, "ROM is not in the iNES format\n");
+        return 1;
+    }
+
+    r->mapper = (buf[7] & 0xF0) | (buf[6] >> 4);
+    uint8_t ines_ver = (buf[7] >> 2) & 0x3;
+    if(ines_ver != 0) {
+        fprintf(stderr, "NES2.0 format is not supported\n");
+        return 2;
+    }
+
+    if(buf[6] & 0b1000) r->mirroring = MIR_FOURSCREEN;
+    else if(buf[6] & 0b1) r->mirroring = MIR_VERTICAL;
+    else r->mirroring = MIR_HORIZONTAL;
+
+    r->prg_rom_sz = buf[4] * PRG_PAGE_SIZE;
+    r->chr_rom_sz = buf[5] * CHR_PAGE_SIZE;
+
+    uint8_t prg_rom_start = 16 + ((buf[6] & 0b100) ? 512 : 0);
+    uint8_t chr_rom_start = prg_rom_start + r->prg_rom_sz;
+
+    r->prg_rom = malloc(sizeof(uint8_t) * r->prg_rom_sz);
+    memcpy(r->prg_rom, &buf[prg_rom_start], r->prg_rom_sz * sizeof(uint8_t));
+    r->chr_rom = malloc(sizeof(uint8_t) * r->chr_rom_sz);
+    memcpy(r->chr_rom, &buf[chr_rom_start], r->chr_rom_sz * sizeof(uint8_t));
+
+    return 0;
+}

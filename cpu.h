@@ -1,4 +1,7 @@
+#ifndef __CPU_H__
+#define __CPU_H__
 #include <stdint.h>
+#include "bus.h"
 
 #define MEMORY_SIZE 65536
 
@@ -8,7 +11,8 @@ typedef struct {
     uint8_t proc_stat_reg;
     uint8_t sp;
     uint16_t pc;
-    uint8_t memory[MEMORY_SIZE];
+    // uint8_t memory[MEMORY_SIZE];
+    bus *b;
 } cpu;
 
 typedef enum {
@@ -144,3 +148,4 @@ typedef struct {
 
 //Array holding all of the instructions for the 6502
 extern instruction instructions[256];
+#endif //__CPU_H__
