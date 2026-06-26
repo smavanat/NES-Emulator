@@ -161,21 +161,25 @@ int main(void) {
             c.b->p->chr_rom = c.b->rom->chr_rom;
             c.b->p->chr_rom_sz = c.b->rom->chr_rom_sz;
             c.b->p->mirroring = c.b->rom->mirroring;
-            frame tile_frame = {0};
+            frame tile_frame[2] = {{0}, {0}};
+            uint8_t curr_frame = 0;
 
             while(!glfwWindowShouldClose(window) && !c.stop) {
                 glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
                 glClear(GL_COLOR_BUFFER_BIT);
 
                 render_begin(&r);
-                    draw_frame(&r, &tile_frame);
+                    draw_frame(&r, &tile_frame[curr_frame]);
                 render_end(&r);
+
+                curr_frame = !curr_frame;
+                memset(tile_frame[curr_frame].data, 0, FRAME_WIDTH * FRAME_HEIGHT *3);
 
                 size_t count = 0;
                 while(count < CPU_CYCLES_PER_FRAME) {
                     size_t cycles;
                     if(c.b->p->nmi_triggered) {
-                        cycles = 2;
+                        cycles = 7;
                         interrupt_nmi(&c);
                     }
                     else {
@@ -183,9 +187,9 @@ int main(void) {
                         // printf("0x02: %02X, 0x03: %02X\n", mem_read(c.b, (0x02)), mem_read(c.b, (0x03)));
                     }
                     for(int i = 0; i < cycles; i++) {
-                        ppu_tick(c.b->p, &tile_frame);
-                        ppu_tick(c.b->p, &tile_frame);
-                        ppu_tick(c.b->p, &tile_frame);
+                        ppu_tick(c.b->p, &tile_frame[curr_frame]);
+                        ppu_tick(c.b->p, &tile_frame[curr_frame]);
+                        ppu_tick(c.b->p, &tile_frame[curr_frame]);
                         count++;
                     }
                 }

@@ -26,7 +26,7 @@ uint8_t mem_read(bus *b, uint16_t addr) {
             case 0x2007:
                 return ppu_read_data(b->p);
             default:
-                fprintf(stderr, "ERROR: Attempting to read from write only PPU register at address: %02X\n", addr);
+                fprintf(stderr, "ERROR: Attempting to read from write only PPU register at address: %04X\n", addr);
         }
     }
     else if(addr <= PPU_REGISTERS_MIRRORS_END) {
@@ -83,7 +83,7 @@ void mem_write(bus *b, uint16_t addr, uint8_t val) {
                 b->p->oamdma_reg = val;
             break;
             default:
-                fprintf(stderr, "Attempting to write to read-only PPU register at address %02X\n", addr);
+                fprintf(stderr, "Attempting to write to read-only PPU register at address %04X\n", addr);
         }
     }
     else if(addr <= PPU_REGISTERS_MIRRORS_END) {
@@ -94,7 +94,7 @@ void mem_write(bus *b, uint16_t addr, uint8_t val) {
         fprintf(stderr, "ERROR: Attempting to write to cartridge ROM\n");
     }
     else {
-        printf("Ignoring memory write-access at %hu\n", addr);
+        printf("Ignoring memory write-access at %04X\n", addr);
     }
 }
 

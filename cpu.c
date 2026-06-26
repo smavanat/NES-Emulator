@@ -361,8 +361,9 @@ uint16_t get_indirect_add(cpu *c, uint8_t start) {
 }
 
 void interrupt_nmi(cpu *c) {
+    printf("NMI fired! PC=%04X, $0040=%02X\n", c->pc, mem_read(c->b, 0x0040));
     push_pc(c);
-    push(c, (c->proc_stat_reg | (1 << 4)));
+    push(c, (c->proc_stat_reg & ~(1 << 4) | (1 << 5)));
     set_cpu_flag(c, INTERRUPT_DISABLE, 1);
 
     set_pc(c, 0xFFFA);
@@ -436,16 +437,16 @@ uint16_t get_argument(cpu *c, address_mode mode, uint8_t get_val, size_t *cycles
             break;
     }
 
-    printf("Address: %04X\n", addr);
+    // printf("Address: %04X\n", addr);
 
     // return get_val ? c->memory[addr] : addr;
     return get_val ? mem_read(c->b, addr) : addr;
 }
 
 size_t execute_instr(cpu *c) {
-    printf("BEFORE: PC=%04X\n", c->pc);
+    // printf("BEFORE: PC=%04X\n", c->pc);
     uint8_t op = fetch_byte(c);
-    printf("PC: %04X | Opcode: %02X\n", c->pc, op);
+    // printf("PC: %04X | Opcode: %02X\n", c->pc, op);
     instruction instr = instructions[op];
     size_t cycles = instr.num_cycles;
 
@@ -851,7 +852,7 @@ size_t execute_instr(cpu *c) {
             printf("Opcode not supported\n");
             break;
     }
-    printf("AFTER EXEC PC=%04X\n", c->pc);
+    // printf("AFTER EXEC PC=%04X\n", c->pc);
     return cycles;
 }
 
