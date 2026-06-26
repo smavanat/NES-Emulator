@@ -93,33 +93,85 @@ uint16_t ppu_mirror_vram_addr(ppu *p, uint16_t addr) {
     return vram_index;
 }
 
+uint8_t ppu_bus_read(ppu *p, uint16_t addr) {
+    addr &= 0x3FFF; //Make sure it is in the 16kb range
+
+    if(addr <= 0x1FFF) return p->chr_rom[addr];
+    if(addr <= 0x2FFF) return p->vram[ppu_mirror_vram_addr(p, addr)];
+    if(addr <= 0x3EFF) return ppu_bus_read(p, addr - 0x1000);
+    if(addr <= 0x3FFF) {
+        //Palette region is mirrored every 32 bytes
+        addr &= 0x1F;
+
+        //Handling special mirrors
+        if(addr == 0x10) addr = 0x00;
+        if(addr == 0x14) addr = 0x04;
+        if(addr == 0x18) addr = 0x08;
+        if(addr == 0x1C) addr = 0x0C;
+        return p->palette_table[addr];
+    }
+
+    return 0;
+}
+
 uint8_t ppu_read_data(ppu *p) {
     uint16_t addr = get_addr_register(p->addr_reg);
-    ppu_increment_vram_addr(p);
+    uint8_t res;
 
-    //Reading from chr_rom
-    if(addr <= 0x1fff) {
-        uint8_t res = p->internal_data_buf;
-        p->internal_data_buf = p->chr_rom[addr];
-        return res;
-    }
-    //Reading from RAM
-    else if(addr <= 0x2fff) {
-        uint8_t res = p->internal_data_buf;
-        p->internal_data_buf = p->vram[ppu_mirror_vram_addr(p, addr)];
-        return res;
-    }
-    else if(addr <= 0x3eff) {
-        fprintf(stderr, "Address Space 0x3000 ... 0x3eff is not expected to be used, requested address: %02X\n", addr);
-    }
-    else if(addr <= 0x3fff) {
-        return p->palette_table[addr - 0x3f00];
+    if(addr >= 0x3F00) {
+        //Palette reads are immediate
+        res = ppu_bus_read(p, addr);
+
+        //Internal buffer is still updated from mirrored nametable
+        p->internal_data_buf = ppu_bus_read(p, addr - 0x1000);
     }
     else {
-        fprintf(stderr, "Unexpected access to mirrored space, requested address: %02X\n", addr);
+        res = p->internal_data_buf;
+        p->internal_data_buf = ppu_bus_read(p, addr);
     }
 
-    return 1;
+    ppu_increment_vram_addr(p);
+
+    return res;
+}
+
+void ppu_bus_write(ppu *p, uint16_t addr, uint8_t val) {
+    addr &= 0x3FFF; //Make sure the address is in the 16kb range
+
+    //CHR ROM, ignore writes. If we do CHR RAM can do writes here later
+    if(addr <= 0x1FFF) {
+        return;
+    }
+    //Nametables
+    if(addr <= 0x2FFF) {
+        uint16_t mirrored = ppu_mirror_vram_addr(p, addr);
+        p->vram[mirrored] = val;
+        return;
+    }
+    //Nametable mirrors
+    if(addr <= 0x3EFF) {
+        ppu_bus_write(p, addr - 0x1000, val);
+    }
+    //Palette tables
+    if(addr <= 0x3FFF) {
+        //Palette region is mirrored every 32 bytes
+        addr &= 0x1F;
+
+        //Handling special mirrors
+        if(addr == 0x10) addr = 0x00;
+        if(addr == 0x14) addr = 0x04;
+        if(addr == 0x18) addr = 0x08;
+        if(addr == 0x1C) addr = 0x0C;
+        p->palette_table[addr] = val;
+
+        return;
+    }
+}
+
+void ppu_write_data(ppu *p, uint8_t val) {
+    uint16_t addr = get_addr_register(p->addr_reg);
+    ppu_bus_write(p, addr, val);
+    ppu_increment_vram_addr(p);
 }
 
 uint8_t get_tile_pixel(const uint8_t *chr_rom, size_t bank, size_t tile, int x, int y) {
@@ -135,33 +187,49 @@ uint8_t get_tile_pixel(const uint8_t *chr_rom, size_t bank, size_t tile, int x, 
     return (((upper >> bit) & 1) << 1) | ((lower >> bit) & 1);
 }
 
-// uint8_t ppu_tick(ppu *p, size_t cycles) {
-uint8_t ppu_tick(ppu *p, frame *fr) {
+void set_frame_pixel(frame *fr, int x, int y, uint8_t rgb[3]) {
+    int base = (y * 3 * FRAME_WIDTH) + (x * 3);
 
+    if(base + 2 < FRAME_WIDTH * FRAME_HEIGHT * 3) {
+        fr->data[base] = rgb[0];
+        fr->data[base+1] = rgb[1];
+        fr->data[base+2] = rgb[2];
+    }
+}
+
+//Represents the ppu operations every clock cycle
+uint8_t ppu_tick(ppu *p, frame *fr) {
+    //Draw a pixel
     if(p->scanline < 240 && p->cycles < 256) {
-        uint8_t bank = get_ppu_ctrl_reg_flag(p, PPU_CR_BACKGROUND_PATTERN_ADDR);
+        uint8_t bank = get_ppu_ctrl_reg_flag(p, PPU_CR_BACKGROUND_PATTERN_ADDR); //Get the bank to get the tile from
+
+        //Get the tile position
         int tile_x = p->cycles / 8;
         int tile_y = p->scanline / 8;
 
+        //Get the pixel position
         int pixel_x = p->cycles % 8;
         int pixel_y = p->scanline % 8;
 
-        uint16_t tile = p->vram[tile_y * 32 + tile_x];
+        //Get the tile
+        uint16_t tile = ppu_bus_read(p, 0x2000 + tile_y * 32 + tile_x);
 
+        //Get the colour used for the tile
         uint8_t colour = get_tile_pixel(p->chr_rom, bank, tile, pixel_x, pixel_y);
 
+        //Draw the pixel to the frame
         switch (colour) {
             case 0:
-                set_frame_pixel(fr, tile_x * 8 + pixel_x, tile_y * 8 + pixel_y, system_palette[0x01]);
+                set_frame_pixel(fr, p->cycles, p->scanline, system_palette[0x01]);
             break;
             case 1:
-                set_frame_pixel(fr, tile_x * 8 + pixel_x, tile_y * 8 + pixel_y, system_palette[0x23]);
+                set_frame_pixel(fr, p->cycles, p->scanline, system_palette[0x23]);
             break;
             case 2:
-                set_frame_pixel(fr, tile_x * 8 + pixel_x, tile_y * 8 + pixel_y, system_palette[0x27]);
+                set_frame_pixel(fr, p->cycles, p->scanline, system_palette[0x27]);
             break;
             case 3:
-                set_frame_pixel(fr, tile_x * 8 + pixel_x, tile_y * 8 + pixel_y, system_palette[0x30]);
+                set_frame_pixel(fr, p->cycles, p->scanline, system_palette[0x30]);
             break;
             default:
                 fprintf(stderr, "ERROR: Wrong colour index\n");
@@ -171,6 +239,21 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
 
     //Advance one dot
     p->cycles++;
+
+    //Odd frames end the last scanline one cycle early to keep up with the cpu
+    if(p->odd_frame && p->scanline == 261 && p->cycles == 339) {
+        p->cycles = 0;
+        p->scanline = 0;
+        p->odd_frame = !p->odd_frame;
+        return 1;
+    }
+
+    //Pre-render scanline
+    if(p->scanline == 261 && p->cycles == 1) {
+        set_ppu_stat_reg_flag(p, PPU_STAT_VBLANK, 0);
+        set_ppu_stat_reg_flag(p, PPU_STAT_SPRITE_ZERO_HIT, 0);
+        set_ppu_stat_reg_flag(p, PPU_STAT_SPRITE_OVERFLOW, 0);
+    }
 
     //End of scanline
     if(p->cycles >= 341) {
@@ -185,109 +268,15 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
             }
         }
 
-        //End of Frame
+        //End of frame
         if(p->scanline >= 262) {
             p->scanline = 0;
-            set_ppu_stat_reg_flag(p, PPU_STAT_VBLANK, 0);
+            p->odd_frame = !p->odd_frame;
             return 1;
         }
     }
 
     return 0;
-}
-
-void set_frame_pixel(frame *fr, int x, int y, uint8_t rgb[3]) {
-    int base = (y * 3 * FRAME_WIDTH) + (x * 3);
-
-    if(base + 2 < FRAME_WIDTH * FRAME_HEIGHT * 3) {
-        fr->data[base] = rgb[0];
-        fr->data[base+1] = rgb[1];
-        fr->data[base+2] = rgb[2];
-    }
-}
-
-frame show_tile(uint8_t *chr_rom, size_t chr_sz, size_t bank, size_t tile_n) {
-    assert(bank <= 1);
-
-    frame fr = {0};
-    bank *= 0x1000;
-    uint8_t tile[16];
-
-    memcpy(tile, &chr_rom[bank + tile_n * 16], 16 * sizeof(uint8_t));
-
-    for(int y = 0; y < 8; y++) {
-        uint8_t upper = tile[y];
-        uint8_t lower = tile[y + 8];
-
-        for(int x = 7; x > -1; x--) {
-            uint8_t value = (1 & upper ) << 1 | (1 & lower);
-            upper >>= 1;
-            lower >>= 1;
-
-            switch (value) {
-                case 0:
-                    set_frame_pixel(&fr, x, y, system_palette[0x01]);
-                break;
-                case 1:
-                    set_frame_pixel(&fr, x, y, system_palette[0x23]);
-                break;
-                case 2:
-                    set_frame_pixel(&fr, x, y, system_palette[0x27]);
-                break;
-                case 3:
-                    set_frame_pixel(&fr, x, y, system_palette[0x30]);
-                break;
-                default:
-                    fprintf(stderr, "ERROR: Wrong colour index\n");
-                break;
-            }
-        }
-    }
-
-    return fr;
-}
-
-void set_tile(ppu *p, frame *fr) {
-    uint8_t bank = get_ppu_ctrl_reg_flag(p, PPU_CR_BACKGROUND_PATTERN_ADDR);
-    bank *= 0x1000;
-
-    for(int i = 0; i < 0x03c0; i++) {
-        uint16_t tile_n = p->vram[i];
-        uint16_t tile_x = i % 32;
-        uint16_t tile_y = i / 32;
-
-        uint8_t tile[16];
-        memcpy(tile, &p->chr_rom[bank + tile_n * 16], 16 * sizeof(uint8_t));
-
-        for(int y = 0; y < 8; y++) {
-            uint8_t upper = tile[y];
-            uint8_t lower = tile[y + 8];
-
-            for(int x = 7; x > -1; x--) {
-                uint8_t value = (1 & upper ) << 1 | (1 & lower);
-                upper >>= 1;
-                lower >>= 1;
-
-                switch (value) {
-                    case 0:
-                        set_frame_pixel(fr, tile_x * 8 + x, tile_y * 8 + y, system_palette[0x01]);
-                    break;
-                    case 1:
-                        set_frame_pixel(fr, tile_x * 8 + x, tile_y * 8 + y, system_palette[0x23]);
-                    break;
-                    case 2:
-                        set_frame_pixel(fr, tile_x * 8 + x, tile_y * 8 + y, system_palette[0x27]);
-                    break;
-                    case 3:
-                        set_frame_pixel(fr, tile_x * 8 + x, tile_y * 8 + y, system_palette[0x30]);
-                    break;
-                    default:
-                        fprintf(stderr, "ERROR: Wrong colour index\n");
-                    break;
-                }
-            }
-        }
-    }
 }
 
 void ortho(float left, float right, float bottom, float top, float nearZ, float farZ, mat4 dest) {

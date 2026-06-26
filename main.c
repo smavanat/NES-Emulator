@@ -151,42 +151,35 @@ int main(void) {
             printf("Loaded\n");
             free(buf);
 
-            c.pc = 0x8000;
+            set_pc(&c, 0xFFFC); //Resetting the pc
             c.b->p->chr_rom = c.b->rom->chr_rom;
             c.b->p->chr_rom_sz = c.b->rom->chr_rom_sz;
             frame tile_frame = {0};
-            // set_tile(c.b->p, &tile_frame);
 
             while(!glfwWindowShouldClose(window) && !c.stop) {
                 glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
                 glClear(GL_COLOR_BUFFER_BIT);
 
                 render_begin(&r);
-                // for(int i = 0; i < 256; i++) {
-                //     frame tile_frame = show_tile(c.b->rom->chr_rom, c.b->rom->chr_rom_sz, 1, i);
                     draw_frame(&r, &tile_frame);
-                // }
                 render_end(&r);
 
                 size_t count = 0;
                 while(count < CPU_CYCLES_PER_FRAME) {
+                    size_t cycles;
                     if(c.b->p->nmi_triggered) {
+                        cycles = 2;
                         interrupt_nmi(&c);
-                        ppu_tick(c.b->p, &tile_frame);
-                        ppu_tick(c.b->p, &tile_frame);
-                        count+=2;
                     }
                     else {
-                        size_t cycles = execute_instr(&c);
-                        // printf("0x02: %02X, 0x03: %02X\n", mem_read(c.b, (0x02)), mem_read(c.b, (0x03)));
-                        for(int i = 0; i < cycles; i++) {
-                            ppu_tick(c.b->p, &tile_frame);
-                            ppu_tick(c.b->p, &tile_frame);
-                            ppu_tick(c.b->p, &tile_frame);
-                            count++;
-                        }
-                        // ppu_tick(c.b->p, cycles);
-                        // count += cycles;
+                        cycles = execute_instr(&c);
+                        printf("0x02: %02X, 0x03: %02X\n", mem_read(c.b, (0x02)), mem_read(c.b, (0x03)));
+                    }
+                    for(int i = 0; i < cycles; i++) {
+                        ppu_tick(c.b->p, &tile_frame);
+                        ppu_tick(c.b->p, &tile_frame);
+                        ppu_tick(c.b->p, &tile_frame);
+                        count++;
                     }
                 }
 

@@ -62,9 +62,8 @@ void mem_write(bus *b, uint16_t addr, uint8_t val) {
             case 0x2006:
                 update_addr_register(b->p->addr_reg, val);
             break;
-            //TODO: FIX THIS
             case 0x2007:
-                b->p->data_reg = val;
+                ppu_write_data(b->p, val);
             break;
             case 0x4014:
                 b->p->oamdma_reg = val;
