@@ -12,15 +12,15 @@
 #define CHR_PAGE_SIZE 8192
 
 typedef struct {
+    size_t prg_rom_sz;
+    size_t chr_rom_sz;
     uint8_t *prg_rom;
     uint8_t *chr_rom;
-    uint16_t prg_rom_sz;
-    uint16_t chr_rom_sz;
     uint8_t mapper;
     mirroring mirroring;
 } rom;
 
-int rom_load(rom *r, char *buf, int buf_len);
+int rom_load(rom *r, uint8_t *buf, int buf_len);
 
 typedef struct {
     uint8_t cpu_vram[2048];

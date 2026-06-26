@@ -1,15 +1,18 @@
 #ifndef __CPU_H__
 #define __CPU_H__
+#include <stddef.h>
 #include <stdint.h>
 #include "bus.h"
 
 #define MEMORY_SIZE 65536
+#define CPU_CYCLES_PER_FRAME 29780
 
 typedef struct {
     uint8_t acc;
     uint8_t x, y;
     uint8_t proc_stat_reg;
     uint8_t sp;
+    uint8_t stop;
     uint16_t pc;
     // uint8_t memory[MEMORY_SIZE];
     bus *b;
@@ -145,6 +148,12 @@ typedef struct {
     address_mode addr_mode;
     uint8_t num_cycles;
 } instruction;
+
+void print_page(cpu *c, uint8_t page_num);
+void print_stack(cpu *c);
+void print_cpu_state(cpu *c);
+size_t execute_instr(cpu *c);
+void interrupt_nmi(cpu *c);
 
 //Array holding all of the instructions for the 6502
 extern instruction instructions[256];

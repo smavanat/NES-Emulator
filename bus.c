@@ -13,13 +13,15 @@ uint8_t mem_read(bus *b, uint16_t addr) {
     else if(addr < 0x2008 || addr == 0x4014) {
         switch (addr) {
             case 0x2002:
+                b->p->scroll_reg->s_ptr = 1;
+                b->p->addr_reg->h_ptr = 1;
                 return b->p->status_reg;
             case 0x2004:
                 return b->p->oamdata_reg;
             case 0x2007:
                 return ppu_read_data(b->p);
             default:
-                fprintf(stderr, "ERROR: Attempting to read from write only PPU register at address: %hu", addr);
+                fprintf(stderr, "ERROR: Attempting to read from write only PPU register at address: %02X\n", addr);
         }
     }
     else if(addr <= PPU_REGISTERS_MIRRORS_END) {
@@ -32,7 +34,7 @@ uint8_t mem_read(bus *b, uint16_t addr) {
         return b->rom->prg_rom[addr];
     }
     else {
-        printf("Ignoring memory access at %hu\n", addr);
+        printf("Ignoring memory access at %02X\n", addr);
     }
 
     return 0;
@@ -68,7 +70,7 @@ void mem_write(bus *b, uint16_t addr, uint8_t val) {
                 b->p->oamdma_reg = val;
             break;
             default:
-                fprintf(stderr, "Attempting to write to read-only PPU register at address %hu\n", addr);
+                fprintf(stderr, "Attempting to write to read-only PPU register at address %02X\n", addr);
         }
     }
     else if(addr <= PPU_REGISTERS_MIRRORS_END) {
@@ -84,7 +86,7 @@ void mem_write(bus *b, uint16_t addr, uint8_t val) {
 }
 
 //TODO: Add support for NES2.0
-int rom_load(rom *r, char *buf, int buf_len) {
+int rom_load(rom *r, uint8_t *buf, int buf_len) {
     if(buf_len < 16) {
         fprintf(stderr, "ROM is too small to contain an iNES header\n");
         return 1;
@@ -109,8 +111,16 @@ int rom_load(rom *r, char *buf, int buf_len) {
     r->prg_rom_sz = buf[4] * PRG_PAGE_SIZE;
     r->chr_rom_sz = buf[5] * CHR_PAGE_SIZE;
 
-    uint8_t prg_rom_start = 16 + ((buf[6] & 0b100) ? 512 : 0);
-    uint8_t chr_rom_start = prg_rom_start + r->prg_rom_sz;
+    size_t trainer_size = (buf[6] & 0x04) ? 512 : 0;
+    size_t required = 16 + trainer_size + r->prg_rom_sz + r->chr_rom_sz;
+
+    if ((size_t)buf_len < required) {
+        fprintf(stderr, "ROM file truncated\n");
+        return 1;
+    }
+
+    size_t prg_rom_start = 16 + ((buf[6] & 0b100) ? 512 : 0);
+    size_t chr_rom_start = prg_rom_start + r->prg_rom_sz;
 
     r->prg_rom = malloc(sizeof(uint8_t) * r->prg_rom_sz);
     memcpy(r->prg_rom, &buf[prg_rom_start], r->prg_rom_sz * sizeof(uint8_t));
