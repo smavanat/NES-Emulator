@@ -10,14 +10,19 @@ uint8_t mem_read(bus *b, uint16_t addr) {
         uint16_t mirror_down_addr = addr & 0x7FF;
         return b->cpu_vram[mirror_down_addr];
     }
-    else if(addr < 0x2008 || addr == 0x4014) {
+    else if((addr >= 0x2000 && addr <= 0x2007) || addr == 0x4014) {
         switch (addr) {
-            case 0x2002:
+            case 0x2002: {
+                uint8_t status = b->p->status_reg;
+                set_ppu_stat_reg_flag(b->p, PPU_STAT_VBLANK, 0);
+
                 b->p->scroll_reg->s_ptr = 1;
                 b->p->addr_reg->h_ptr = 1;
-                return b->p->status_reg;
+
+                return status;
+            }
             case 0x2004:
-                return b->p->oamdata_reg;
+                return b->p->oam_data[b->p->oamaddr_reg];
             case 0x2007:
                 return ppu_read_data(b->p);
             default:
@@ -25,7 +30,7 @@ uint8_t mem_read(bus *b, uint16_t addr) {
         }
     }
     else if(addr <= PPU_REGISTERS_MIRRORS_END) {
-        uint16_t mirror_down_addr = addr & 0x2007;
+        uint16_t mirror_down_addr = 0x2000 + (addr % 8);
         return mem_read(b, mirror_down_addr);
     }
     else if(addr >= 0x8000 && addr <= 0xFFFF) {
@@ -47,8 +52,14 @@ void mem_write(bus *b, uint16_t addr, uint8_t val) {
     }
     else if(addr < 0x2008 || addr == 0x4014) {
         switch(addr) {
-            case 0x2000:
+            case 0x2000: {
+                uint8_t old = get_ppu_ctrl_reg_flag(b->p, PPU_CR_GENERATE_NMI);
                 b->p->ctrl_reg = val;
+                uint8_t cur = get_ppu_ctrl_reg_flag(b->p, PPU_CR_GENERATE_NMI);
+
+                if(!old && cur && get_ppu_stat_reg_flag(b->p, PPU_STAT_VBLANK))
+                    b->p->nmi_triggered = 1;
+            }
             break;
             case 0x2001:
                 b->p->mask_reg = val;
@@ -57,7 +68,10 @@ void mem_write(bus *b, uint16_t addr, uint8_t val) {
                 b->p->oamaddr_reg = val;
             break;
             case 0x2004:
-                b->p->oamdata_reg = val;
+                b->p->oam_data[b->p->oamaddr_reg] = val;
+            break;
+            case 0x2005:
+                update_scroll_register(b->p->scroll_reg, val);
             break;
             case 0x2006:
                 update_addr_register(b->p->addr_reg, val);
@@ -73,7 +87,7 @@ void mem_write(bus *b, uint16_t addr, uint8_t val) {
         }
     }
     else if(addr <= PPU_REGISTERS_MIRRORS_END) {
-        uint16_t mirror_down_addr = addr & 0x2007;
+        uint16_t mirror_down_addr = 0x2000 + (addr % 8);
         mem_write(b, mirror_down_addr, val);
     }
     else if(addr >= 0x8000 && addr <= 0xFFFF) {

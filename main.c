@@ -128,6 +128,7 @@ int init(GLFWwindow **window) {
 int main(void) {
     cpu c = {0};
     c.sp = 0xFF;
+    c.proc_stat_reg = 0x34;
 
     uint8_t *buf;
     int sz = read_to_end("../pacman.nes", &buf, 0);
@@ -138,12 +139,12 @@ int main(void) {
 
     if(init(&window)) {
         printf("Initialised\n");
-        c.b = malloc(sizeof(bus));
-        c.b->rom = malloc(sizeof(rom));
-        c.b->p = malloc(sizeof(ppu));
-        c.b->p->addr_reg = malloc(sizeof(addr_register));
+        c.b = calloc(1, sizeof(bus));
+        c.b->rom = calloc(1, sizeof(rom));
+        c.b->p = calloc(1, sizeof(ppu));
+        c.b->p->addr_reg = calloc(1, sizeof(addr_register));
         c.b->p->addr_reg->h_ptr = 1;
-        c.b->p->scroll_reg = malloc(sizeof(scroll_register));
+        c.b->p->scroll_reg = calloc(1, sizeof(scroll_register));
         c.b->p->scroll_reg->s_ptr = 1;
         r = render_init();
 
@@ -152,8 +153,14 @@ int main(void) {
             free(buf);
 
             set_pc(&c, 0xFFFC); //Resetting the pc
+            printf("RESET VECTOR = %02X %02X\n", mem_read(c.b, 0xFFFC), mem_read(c.b, 0xFFFD));
+            printf("Reset vector: %04X\n", c.pc);
+            // mem_write(c.b, 0x2000, 0x80);
+            // mem_write(c.b, 0x2006, 0x20);
+            // mem_write(c.b, 0x2007, 0x01);
             c.b->p->chr_rom = c.b->rom->chr_rom;
             c.b->p->chr_rom_sz = c.b->rom->chr_rom_sz;
+            c.b->p->mirroring = c.b->rom->mirroring;
             frame tile_frame = {0};
 
             while(!glfwWindowShouldClose(window) && !c.stop) {
@@ -173,7 +180,7 @@ int main(void) {
                     }
                     else {
                         cycles = execute_instr(&c);
-                        printf("0x02: %02X, 0x03: %02X\n", mem_read(c.b, (0x02)), mem_read(c.b, (0x03)));
+                        // printf("0x02: %02X, 0x03: %02X\n", mem_read(c.b, (0x02)), mem_read(c.b, (0x03)));
                     }
                     for(int i = 0; i < cycles; i++) {
                         ppu_tick(c.b->p, &tile_frame);

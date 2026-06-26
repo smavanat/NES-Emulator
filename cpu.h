@@ -149,6 +149,7 @@ typedef struct {
     uint8_t num_cycles;
 } instruction;
 
+void set_pc(cpu *c, uint16_t addr);
 void print_page(cpu *c, uint8_t page_num);
 void print_stack(cpu *c);
 void print_cpu_state(cpu *c);

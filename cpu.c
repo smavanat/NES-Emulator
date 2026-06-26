@@ -285,7 +285,6 @@ instruction instructions[256] = {
 //Returns the value of the byte at pc and increments pc
 uint8_t fetch_byte(cpu *c) {
     return mem_read(c->b, c->pc++);
-    // return c->memory[c->pc++];
 }
 
 //Gets the value of the given cpu flag
@@ -312,7 +311,6 @@ void branch(cpu *c, uint8_t expr, size_t *cycles) {
 
 //Pushes a value onto the stack and decrements sp
 void push(cpu* c, uint8_t val) {
-    // c->memory[0x100 + c->sp] = val;
     mem_write(c->b, 0x100 + c->sp, val);
     c->sp--;
 }
@@ -320,7 +318,6 @@ void push(cpu* c, uint8_t val) {
 //Pops the top value off of the stack and increments sp
 uint8_t pull(cpu *c) {
     c->sp++;
-    // return c->memory[0x100 + c->sp];
     return mem_read(c->b, 0x100 + c->sp);
 }
 
@@ -343,7 +340,6 @@ void pull_pc(cpu *c) {
 
 //Sets the pc to the little endian 2 byte value stored at the given address and its successor
 void set_pc(cpu *c, uint16_t addr) {
-    // c->pc = (((uint16_t)c->memory[addr+1]) << 8) | c->memory[addr];
     uint8_t lo = mem_read(c->b, addr);
     uint8_t hi = mem_read(c->b, addr+1);
 
@@ -358,8 +354,6 @@ uint16_t get_addr(cpu *c) {
 }
 
 uint16_t get_indirect_add(cpu *c, uint8_t start) {
-    // return (((uint16_t)c->memory[start+1]) << 8) | c->memory[start];
-
     uint8_t lo = mem_read(c->b, start);
     uint8_t hi = mem_read(c->b, start+1);
 
@@ -371,7 +365,6 @@ void interrupt_nmi(cpu *c) {
     push(c, (c->proc_stat_reg | (1 << 4)));
     set_cpu_flag(c, INTERRUPT_DISABLE, 1);
 
-    // ppu_tick(c->b->p, 2);
     set_pc(c, 0xFFFA);
     c->b->p->nmi_triggered = 0;
 }
@@ -411,10 +404,11 @@ uint16_t get_argument(cpu *c, address_mode mode, uint8_t get_val, size_t *cycles
             return fetch_byte(c);
         case IMPLICIT: //Only used by BRK
             break;
-        case INDIRECT:
-        {
+        case INDIRECT: {
             uint16_t ptr = get_addr(c);
-            addr = mem_read(c->b, ptr) | (mem_read(c->b, ptr+1) << 8);
+            uint8_t lo = mem_read(c->b, ptr);
+            uint8_t hi = mem_read(c->b, (ptr & 0xFF00) | ((ptr + 1) & 0x00FF)); //wrap within page
+            addr = (((uint16_t)hi) << 8) | lo;
         }
             break;
         case INDIRECT_X:
@@ -442,15 +436,18 @@ uint16_t get_argument(cpu *c, address_mode mode, uint8_t get_val, size_t *cycles
             break;
     }
 
+    printf("Address: %04X\n", addr);
+
     // return get_val ? c->memory[addr] : addr;
     return get_val ? mem_read(c->b, addr) : addr;
 }
 
 size_t execute_instr(cpu *c) {
+    printf("BEFORE: PC=%04X\n", c->pc);
     uint8_t op = fetch_byte(c);
+    printf("PC: %04X | Opcode: %02X\n", c->pc, op);
     instruction instr = instructions[op];
     size_t cycles = instr.num_cycles;
-    uint16_t param[4];
 
     switch(instr.instr) {
         //Loads value from memory address into accumulator
@@ -473,7 +470,6 @@ size_t execute_instr(cpu *c) {
             break;
         //Stores the value in the accumulator at the given memory address
         case STA:
-            // c->memory[get_argument(c, instr.addr_mode, 0)] = c->acc;
             mem_write(c->b, get_argument(c, instr.addr_mode, 0, &cycles), c->acc);
             break;
         //Stores the value in the x register at the given memory address
@@ -513,49 +509,53 @@ size_t execute_instr(cpu *c) {
         //Adds a memory value and the carry flag to the accumulator
         //Sets the carry flag if there is overflow
         //Sets the overflow flag if there is signed overflow (result has different sign from both memory value and accumulator)
-        case ADC:
-            param[0] = get_argument(c, instr.addr_mode, 1, &cycles);
-            param[1] = c->acc + param[0] + get_cpu_flag(c, CARRY);
-            param[2] = (uint8_t)param[1];
-            set_cpu_flag(c, CARRY, param[1] > 0xFF);
-            set_cpu_flag(c, ZERO, param[2] == 0);
-            set_cpu_flag(c, OVERFLOW, (c->acc ^ param[2]) & (param[2] ^ param[0]) & 0x80);
-            set_cpu_flag(c, NEGATIVE,  param[2] & 0x80);
-            c->acc = (uint8_t)param[1];
-            break;
+        case ADC: {
+            uint16_t param = get_argument(c, instr.addr_mode, 1, &cycles);
+            uint16_t sum = c->acc + param + get_cpu_flag(c, CARRY);
+            uint8_t trunc_sum = (uint8_t)sum;
+            set_cpu_flag(c, CARRY, sum > 0xFF);
+            set_cpu_flag(c, ZERO, trunc_sum == 0);
+            set_cpu_flag(c, OVERFLOW, (c->acc ^ trunc_sum) & (trunc_sum ^ param) & 0x80);
+            set_cpu_flag(c, NEGATIVE,  trunc_sum & 0x80);
+            c->acc = trunc_sum;
+        }
+        break;
         //Subtracts a memory value and the carry flag to the accumulator
         //Sets the carry flag if there is overflow
         //Sets the overflow flag if there is signed overflow (result has different sign from both memory value and accumulator)
-        case SBC:
-            param[0] = get_argument(c, instr.addr_mode, 1, &cycles);
-            param[1] = c->acc - param[0] - !get_cpu_flag(c, CARRY);
-            param[2] = (uint8_t)param[1];
-            set_cpu_flag(c, CARRY, !(param[1] < 0xFF));
-            set_cpu_flag(c, ZERO, param[2] == 0);
-            set_cpu_flag(c, OVERFLOW, (c->acc ^ param[2]) & (param[2] ^ ~param[0]) & 0x80);
-            set_cpu_flag(c, NEGATIVE,  param[2] & 0x80);
-            c->acc = (uint8_t)param[1];
-            break;
+        case SBC: {
+            uint16_t param = get_argument(c, instr.addr_mode, 1, &cycles);
+            uint16_t sum = c->acc - param - !get_cpu_flag(c, CARRY);
+            uint8_t trunc_sum = (uint8_t)sum;
+            set_cpu_flag(c, CARRY, !(sum > 0xFF));
+            set_cpu_flag(c, ZERO, trunc_sum == 0);
+            set_cpu_flag(c, OVERFLOW, (c->acc ^ trunc_sum) & (trunc_sum ^ ~param) & 0x80);
+            set_cpu_flag(c, NEGATIVE,  trunc_sum & 0x80);
+            c->acc = trunc_sum;
+        }
+        break;
         //Increments a given memory value by 1
-        case INC:
-            param[0] = get_argument(c, instr.addr_mode, 0, &cycles);
-            // c->memory[param[0]]++;
-            mem_write(c->b, param[0], mem_read(c->b, param[0])+1);
-            // set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
-            // set_cpu_flag(c, NEGATIVE, (c->memory[param[0]] & 0x80));
-            set_cpu_flag(c, ZERO, mem_read(c->b, param[0]) == 0);
-            set_cpu_flag(c, NEGATIVE, mem_read(c->b, param[0]) & 0x80);
-            break;
+        case INC: {
+            uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+            uint8_t val = mem_read(c->b, param);
+            val++;
+
+            mem_write(c->b, param, val);
+            set_cpu_flag(c, ZERO, val == 0);
+            set_cpu_flag(c, NEGATIVE, val & 0x80);
+        }
+        break;
         //Decrements a given memory value by 1
-        case DEC:
-            param[0] = get_argument(c, instr.addr_mode, 0, &cycles);
-            // c->memory[param[0]]--;
-            mem_write(c->b, param[0], mem_read(c->b, param[0])-1);
-            // set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
-            // set_cpu_flag(c, NEGATIVE, (c->memory[param[0]] & 0x80));
-            set_cpu_flag(c, ZERO, mem_read(c->b, param[0]) == 0);
-            set_cpu_flag(c, NEGATIVE, mem_read(c->b, param[0]) & 0x80);
-            break;
+        case DEC: {
+            uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+            uint8_t val = mem_read(c->b, param);
+            val--;
+
+            mem_write(c->b, param, val);
+            set_cpu_flag(c, ZERO, val == 0);
+            set_cpu_flag(c, NEGATIVE, val & 0x80);
+        }
+        break;
         //Increments the value in the x register by 1
         case INX:
             c->x++;
@@ -590,15 +590,13 @@ size_t execute_instr(cpu *c) {
                 set_cpu_flag(c, NEGATIVE, c->acc & 0x80);
             }
             else {
-                param[0] = get_argument(c, instr.addr_mode, 0, &cycles);
-                // set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x80));
-                set_cpu_flag(c, CARRY, mem_read(c->b, param[0]) & 0x80);
-                // c->memory[param[0]] <<= 1;
-                mem_write(c->b, param[0], mem_read(c->b, param[0]) << 1);
-                // set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
-                // set_cpu_flag(c, NEGATIVE, c->memory[param[0]] & 0x80);
-                set_cpu_flag(c, ZERO, mem_read(c->b, param[0]) == 0);
-                set_cpu_flag(c, NEGATIVE, mem_read(c->b, param[0]) & 0x80);
+                uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+                uint8_t val = mem_read(c->b, param);
+                set_cpu_flag(c, CARRY, val & 0x80);
+                val <<= 1;
+                mem_write(c->b, param, val);
+                set_cpu_flag(c, ZERO, val == 0);
+                set_cpu_flag(c, NEGATIVE, val & 0x80);
             }
             break;
         //Shifts a memory value one bit to the right,
@@ -611,13 +609,12 @@ size_t execute_instr(cpu *c) {
                 set_cpu_flag(c, NEGATIVE, 0);
             }
             else {
-                param[0] = get_argument(c, instr.addr_mode, 0, &cycles);
-                // set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x1));
-                set_cpu_flag(c, CARRY, mem_read(c->b, param[0]) & 0x1);
-                // c->memory[param[0]] >>= 1;
-                mem_write(c->b, param[0], mem_read(c->b, param[0]) >> 1);
-                // set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
-                set_cpu_flag(c, ZERO, mem_read(c->b, param[0]) == 0);
+                uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+                uint8_t val = mem_read(c->b, param);
+                set_cpu_flag(c, CARRY, val & 0x1);
+                val >>= 1;
+                mem_write(c->b, param, val);
+                set_cpu_flag(c, ZERO, val == 0);
                 set_cpu_flag(c, NEGATIVE, 0);
             }
             break;
@@ -635,18 +632,15 @@ size_t execute_instr(cpu *c) {
                 set_cpu_flag(c, NEGATIVE, c->acc & 0x80);
             }
             else {
-                param[0] = get_argument(c, instr.addr_mode, 0, &cycles);
+                uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
                 uint8_t old_carry = get_cpu_flag(c, CARRY);
-                // set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x80));
-                set_cpu_flag(c, CARRY, mem_read(c->b, param[0]) & 0x80);
-                // c->memory[param[0]] <<= 1;
-                // c->memory[param[0]] |= old_carry;
-                mem_write(c->b, param[0], mem_read(c->b, param[0]) << 1);
-                mem_write(c->b, param[0], mem_read(c->b, param[0]) | old_carry);
-                // set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
-                // set_cpu_flag(c, NEGATIVE, c->memory[param[0]] & 0x80);
-                set_cpu_flag(c, ZERO, mem_read(c->b, param[0]) == 0);
-                set_cpu_flag(c, NEGATIVE, mem_read(c->b, param[0]) & 0x80);
+                uint8_t val = mem_read(c->b, param);
+                set_cpu_flag(c, CARRY, val & 0x80);
+                val <<= 1;
+                val |= old_carry;
+                mem_write(c->b, param, val);
+                set_cpu_flag(c, ZERO, val == 0);
+                set_cpu_flag(c, NEGATIVE, val & 0x80);
             }
             break;
         //Rotates a memory value one bit to the right
@@ -663,54 +657,53 @@ size_t execute_instr(cpu *c) {
                 set_cpu_flag(c, NEGATIVE, c->acc & 0x80);
             }
             else {
-                param[0] = get_argument(c, instr.addr_mode, 0, &cycles);
+                uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
                 uint8_t old_carry = get_cpu_flag(c, CARRY);
-                // set_cpu_flag(c, CARRY, (c->memory[param[0]] & 0x1));
-                set_cpu_flag(c, CARRY, mem_read(c->b, param[0]) & 0x1);
-                // c->memory[param[0]] >>= 1;
-                // c->memory[param[0]] |= (old_carry << 7);
-                mem_write(c->b, param[0], mem_read(c->b, param[0]) >> 1);
-                mem_write(c->b, param[0], mem_read(c->b, param[0]) | (old_carry << 7));
-                // set_cpu_flag(c, ZERO, c->memory[param[0]] == 0);
-                // set_cpu_flag(c, NEGATIVE, c->memory[param[0]] & 0x80);
-                set_cpu_flag(c, ZERO, mem_read(c->b, param[0]) == 0);
-                set_cpu_flag(c, NEGATIVE, mem_read(c->b, param[0]) & 0x80);
+                uint8_t val = mem_read(c->b, param);
+                set_cpu_flag(c, CARRY, val & 0x1);
+                val >>= 1;
+                val |= (old_carry << 7);
+                mem_write(c->b, param, val);
+                set_cpu_flag(c, ZERO, val == 0);
+                set_cpu_flag(c, NEGATIVE, val & 0x80);
             }
             break;
         //Ands the value in the accumulator and some memory value
-        case AND:
-            param[0] = get_argument(c, instr.addr_mode, 1, &cycles);
-            c->acc &= param[0];
+        case AND: {
+            uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
+            c->acc &= param;
             set_cpu_flag(c, ZERO, c->acc == 0);
             set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
-            break;
+        }
+        break;
         //Ors the value in the accumulator and some memory value
-        case ORA:
-            param[0] = get_argument(c, instr.addr_mode, 1, &cycles);
-            c->acc |= param[0];
+        case ORA: {
+            uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
+            c->acc |= param;
             set_cpu_flag(c, ZERO, c->acc == 0);
             set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
-            break;
+        }
+        break;
         //Xors the value in the accumulator and some memory value
-        case XOR:
-            param[0] = get_argument(c, instr.addr_mode, 1, &cycles);
-            c->acc ^= param[0];
+        case XOR: {
+            uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
+            c->acc ^= param;
             set_cpu_flag(c, ZERO, c->acc == 0);
             set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
-            break;
+        }
+        break;
         //Ands the accumulator and a memory value and then sets CPU flags
         //if any bits are set, specifically NEGATIVE if bit 7 is set
         //OVERFLOW if bit 6 is set, or ZERO if the result is 0
         //Does not modfiy the value in the accumulator.
-        case BIT:
-            param[0] = get_argument(c, instr.addr_mode, 1, &cycles);
-            set_cpu_flag(c, NEGATIVE, (param[0] & 0x80));
-            set_cpu_flag(c, OVERFLOW, (param[0] & 0x40));
-            param[0] &= c->acc;
-            set_cpu_flag(c, ZERO, param[0] == 0);
-            // set_cpu_flag(c, NEGATIVE, (param[0] & 0x80));
-            // set_cpu_flag(c, OVERFLOW, (param[0] & 0x40));
-            break;
+        case BIT: {
+            uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
+            set_cpu_flag(c, NEGATIVE, (param & 0x80));
+            set_cpu_flag(c, OVERFLOW, (param & 0x40));
+            param &= c->acc;
+            set_cpu_flag(c, ZERO, param == 0);
+        }
+        break;
         //Compares the accumulator to a memory value
         case CMP:
             compare(c, c->acc, get_argument(c, instr.addr_mode, 1, &cycles));
@@ -758,17 +751,21 @@ size_t execute_instr(cpu *c) {
         //Sets the pc to the memory address specified
         case JMP:
             c->pc = get_argument(c, instr.addr_mode, 0, &cycles);
-            // set_pc(c, param[0]);
             break;
         //Pushes the pc onto the stack and jumps to the subroutine
         //at the given memory address
-        case JSR:
-            push_pc(c);
-            c->pc = get_argument(c, instr.addr_mode, 0, &cycles);
-            break;
+        case JSR: {
+            uint16_t addr = get_argument(c, instr.addr_mode, 0, &cycles);
+            uint16_t ret = c->pc - 1;
+            push(c, ret >> 8);
+            push(c, ret & 0xFF);
+            c->pc = addr;
+        }
+        break;
         //Returns from a subroutine by pulling the pc from the stack
         case RTS:
             pull_pc(c);
+            c->pc++;
             break;
         //Pushes the high and low bytes of the pc to the stack (separately);
         //Pushes the processor status register with the Break flag set to true to the stack
@@ -854,7 +851,7 @@ size_t execute_instr(cpu *c) {
             printf("Opcode not supported\n");
             break;
     }
-
+    printf("AFTER EXEC PC=%04X\n", c->pc);
     return cycles;
 }
 

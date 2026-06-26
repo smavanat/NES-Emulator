@@ -46,6 +46,19 @@ void increment_addr_register(addr_register *reg, uint8_t val) {
     if(get_addr_register(reg) > 0x3FFF) set_addr_register(reg, get_addr_register(reg) & 0x3FFF);
 }
 
+void set_scroll_register(scroll_register *reg, uint16_t val) {
+    reg->xscroll = (uint8_t)(val >> 8);
+    reg->yscroll = (uint8_t)val;
+}
+uint16_t get_scroll_register(scroll_register *reg) {
+    return ((uint16_t)reg->xscroll) << 8 | (uint16_t)reg->yscroll;
+}
+void update_scroll_register(scroll_register *reg, uint8_t val) {
+    if(reg->s_ptr) reg->xscroll = val; else reg->yscroll = val;
+
+    reg->s_ptr = !reg->s_ptr;
+}
+
 void set_ppu_ctrl_reg_flag(ppu* p, ppu_cr_flag flag, uint8_t cond) {
     if(cond) p->ctrl_reg |= (uint8_t)(1 << flag);
     else p->ctrl_reg &= (uint8_t)~(1 << flag);
@@ -169,6 +182,7 @@ void ppu_bus_write(ppu *p, uint16_t addr, uint8_t val) {
 }
 
 void ppu_write_data(ppu *p, uint8_t val) {
+    printf("%04X <- %02X\n", get_addr_register(p->addr_reg), val);
     uint16_t addr = get_addr_register(p->addr_reg);
     ppu_bus_write(p, addr, val);
     ppu_increment_vram_addr(p);
@@ -211,8 +225,10 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
         int pixel_x = p->cycles % 8;
         int pixel_y = p->scanline % 8;
 
+        uint16_t base = 0x2000 + ((p->ctrl_reg & 0x03) * 0x400);
+
         //Get the tile
-        uint16_t tile = ppu_bus_read(p, 0x2000 + tile_y * 32 + tile_x);
+        uint16_t tile = ppu_bus_read(p, base + tile_y * 32 + tile_x);
 
         //Get the colour used for the tile
         uint8_t colour = get_tile_pixel(p->chr_rom, bank, tile, pixel_x, pixel_y);
@@ -262,8 +278,8 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
 
         //Enter VBlank
         if(p->scanline == 241) {
+            set_ppu_stat_reg_flag(p, PPU_STAT_VBLANK, 1);
             if(get_ppu_ctrl_reg_flag(p, PPU_CR_GENERATE_NMI)) {
-                set_ppu_stat_reg_flag(p, PPU_STAT_VBLANK, 1);
                 p->nmi_triggered = 1;
             }
         }

@@ -21,6 +21,10 @@ typedef struct {
     uint8_t s_ptr;
 } scroll_register;
 
+void set_scroll_register(scroll_register *reg, uint16_t val);
+uint16_t get_scroll_register(scroll_register *reg);
+void update_scroll_register(scroll_register *reg, uint8_t val);
+
 typedef enum {
     PPU_CR_NAMETABLE_1,
     PPU_CR_NAMETABLE_2,
@@ -58,11 +62,11 @@ typedef struct {
     uint8_t mask_reg;
     uint8_t status_reg;
     uint8_t oamaddr_reg;
-    uint8_t oamdata_reg;
     uint8_t data_reg;
     uint8_t oamdma_reg;
     uint8_t internal_data_buf;
     uint8_t nmi_triggered;
+    uint8_t odd_frame;
     mirroring mirroring;
 } ppu;
 
@@ -74,10 +78,6 @@ typedef struct {
 typedef struct {
     uint8_t data[FRAME_WIDTH * FRAME_HEIGHT * 3];
 } frame;
-
-void set_frame_pixel(frame *fr, int x, int y, uint8_t rgb[3]);
-frame show_tile(uint8_t *chr_rom, size_t chr_sz, size_t bank, size_t tile_n);
-void set_tile(ppu *p, frame *fr);
 
 //Control Register functions
 void set_ppu_ctrl_reg_flag(ppu* p, ppu_cr_flag flag, uint8_t cond);
@@ -93,6 +93,7 @@ uint8_t get_ppu_stat_reg_flag(ppu* p, ppu_stat_flag flag);
 void ppu_increment_vram_addr(ppu *p);
 uint16_t ppu_mirror_vram_addr(ppu *p, uint16_t addr);
 uint8_t ppu_read_data(ppu *p);
+void ppu_write_data(ppu *p, uint8_t val);
 uint8_t ppu_tick(ppu *p, frame *fr);
 
 extern uint8_t system_palette[64][3];
