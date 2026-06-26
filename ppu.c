@@ -182,7 +182,6 @@ void ppu_bus_write(ppu *p, uint16_t addr, uint8_t val) {
 }
 
 void ppu_write_data(ppu *p, uint8_t val) {
-    printf("%04X <- %02X\n", get_addr_register(p->addr_reg), val);
     uint16_t addr = get_addr_register(p->addr_reg);
     ppu_bus_write(p, addr, val);
     ppu_increment_vram_addr(p);
@@ -211,45 +210,146 @@ void set_frame_pixel(frame *fr, int x, int y, uint8_t rgb[3]) {
     }
 }
 
+void bg_palette(ppu *p, size_t tile_x, size_t tile_y, uint8_t *colour) {
+    size_t attr_table_idx = tile_y / 4 * 8 + tile_x / 4;
+    uint16_t nametable_base = 0x2000 + ((p->ctrl_reg & 0x03) * 0x400);
+    uint8_t attr_byte = ppu_bus_read(p, nametable_base + 0x3C0 + attr_table_idx);
+    uint8_t palette_idx;
+
+    uint8_t x_quad = (tile_x % 4) >= 2 ? 1 : 0;
+    uint8_t y_quad = (tile_y % 4) >= 2 ? 1 : 0;
+    uint8_t shift = (y_quad * 2 + x_quad) * 2;  // 0, 2, 4, or 6
+    palette_idx = (attr_byte >> shift) & 0b11;
+
+    uint8_t palette_start = 1 + palette_idx * 4;
+    colour[0] = p->palette_table[palette_start];
+    colour[1] = p->palette_table[palette_start+1];
+    colour[2] = p->palette_table[palette_start+2];
+}
+
+void sprite_palette(ppu *p, uint8_t palette_idx, uint8_t *colour) {
+    uint8_t palette_start = 0x11 + palette_idx * 4;
+    colour[0] = p->palette_table[palette_start];
+    colour[1] = p->palette_table[palette_start+1];
+    colour[2] = p->palette_table[palette_start+2];
+}
+
+void evaluate_sprites(ppu *p) {
+    p->secondary_oam_count = 0;
+    uint8_t sprite_height = get_ppu_ctrl_reg_flag(p, PPU_CR_SPRITE_SIZE) ? 16 : 8;
+
+    for(int i = 0; i < 64; i++) {
+        uint8_t sprite_y = p->oam_data[i * 4];
+
+        //If the sprite is not on the current line, skip it
+        int diff_y = (int)p->scanline - (int)sprite_y;
+        if(diff_y < 0 || diff_y >= sprite_height) continue;
+
+        if(p->secondary_oam_count >= 8) {
+            // Overflow if more than 8 sprites on a scanline
+            set_ppu_stat_reg_flag(p, PPU_STAT_SPRITE_OVERFLOW, 1);
+            break;
+        }
+
+        p->secondary_oam[p->secondary_oam_count].y = p->oam_data[i*4];
+        p->secondary_oam[p->secondary_oam_count].tile = p->oam_data[i*4+1];
+        p->secondary_oam[p->secondary_oam_count].attributes = p->oam_data[i*4+2];
+        p->secondary_oam[p->secondary_oam_count].x = p->oam_data[i*4+3];
+        // Track original OAM index for sprite zero hit detection
+        p->secondary_oam[p->secondary_oam_count].oam_index   = i;
+        p->secondary_oam_count++;
+    }
+}
+
 //Represents the ppu operations every clock cycle
 uint8_t ppu_tick(ppu *p, frame *fr) {
     //Draw a pixel
     if(p->scanline < 240 && p->cycles < 256) {
+        //Drawing background
         uint8_t bank = get_ppu_ctrl_reg_flag(p, PPU_CR_BACKGROUND_PATTERN_ADDR); //Get the bank to get the tile from
 
         //Get the tile position
-        int tile_x = p->cycles / 8;
-        int tile_y = p->scanline / 8;
+        size_t tile_x = p->cycles / 8;
+        size_t tile_y = p->scanline / 8;
 
         //Get the pixel position
-        int pixel_x = p->cycles % 8;
-        int pixel_y = p->scanline % 8;
+        size_t pixel_x = p->cycles % 8;
+        size_t pixel_y = p->scanline % 8;
 
-        uint16_t base = 0x2000 + ((p->ctrl_reg & 0x03) * 0x400);
+        uint16_t nametable_base = 0x2000 + ((p->ctrl_reg & 0x03) * 0x400);
 
         //Get the tile
-        uint16_t tile = ppu_bus_read(p, base + tile_y * 32 + tile_x);
+        uint16_t tile = ppu_bus_read(p, nametable_base + tile_y * 32 + tile_x);
 
         //Get the colour used for the tile
         uint8_t colour = get_tile_pixel(p->chr_rom, bank, tile, pixel_x, pixel_y);
 
+        //Get the palette
+        uint8_t pal[3] = {0};
+        bg_palette(p, tile_x, tile_y, pal);
+
         //Draw the pixel to the frame
         switch (colour) {
             case 0:
-                set_frame_pixel(fr, p->cycles, p->scanline, system_palette[0x01]);
+                set_frame_pixel(fr, p->cycles, p->scanline, system_palette[p->palette_table[0]]);
             break;
             case 1:
-                set_frame_pixel(fr, p->cycles, p->scanline, system_palette[0x23]);
+                set_frame_pixel(fr, p->cycles, p->scanline, system_palette[pal[0]]);
             break;
             case 2:
-                set_frame_pixel(fr, p->cycles, p->scanline, system_palette[0x27]);
+                set_frame_pixel(fr, p->cycles, p->scanline, system_palette[pal[1]]);
             break;
             case 3:
-                set_frame_pixel(fr, p->cycles, p->scanline, system_palette[0x30]);
+                set_frame_pixel(fr, p->cycles, p->scanline, system_palette[pal[2]]);
             break;
             default:
                 fprintf(stderr, "ERROR: Wrong colour index\n");
             break;
+        }
+
+        //Drawing sprites
+        //TODO: Draw 16x8 sprites as well (currently only do 8x8)
+        for(int i = 0; i < p->secondary_oam_count; i++) {
+            //Check if this sprite falls on the current pixel
+            int diff_x = (int)p->cycles - (int)p->secondary_oam[i].x;
+            int diff_y = (int)p->scanline - (int)p->secondary_oam[i].y;
+
+            if(diff_x < 0 || diff_x > 7) continue;
+
+            //Extract attribute fields:
+            uint8_t flip_h = (p->secondary_oam[i].attributes >> 6) & 1;
+            uint8_t flip_v = (p->secondary_oam[i].attributes >> 7) & 1;
+            uint8_t priority = (p->secondary_oam[i].attributes >> 5) & 1;
+            uint8_t pal_idx = p->secondary_oam[i].attributes & 0x03;
+
+            //Apply flipping
+            int px = flip_h ? (7 - diff_x) : diff_x;
+            int py = flip_v ? (7 - diff_y) : diff_y;
+
+            //Get sprite pattern table
+            uint8_t pat_table = get_ppu_ctrl_reg_flag(p, PPU_CR_SPRITE_PATTERN_ADDR);
+
+            //Get the pixel colour index
+            uint8_t sprite_colour = get_tile_pixel(p->chr_rom, pat_table, p->secondary_oam[i].tile, px, py);
+
+            //0 means transparent for sprites
+            if(sprite_colour == 0) continue;
+
+            //Priority: If bit set, sprite is behind background (only draw over colour 0)
+            if(priority && colour != 0) continue;
+
+            //Sprite zero hit detection
+            if(p->secondary_oam[i].oam_index == 0) set_ppu_stat_reg_flag(p, PPU_STAT_SPRITE_ZERO_HIT, 1);
+
+            //Get palette and draw the sprite
+            uint8_t pal[3] = {0};
+            sprite_palette(p, pal_idx, pal);
+
+            switch(sprite_colour) {
+                case 1: set_frame_pixel(fr, p->cycles, p->scanline, system_palette[pal[0]]); break;
+                case 2: set_frame_pixel(fr, p->cycles, p->scanline, system_palette[pal[1]]); break;
+                case 3: set_frame_pixel(fr, p->cycles, p->scanline, system_palette[pal[2]]); break;
+            }
         }
     }
 
@@ -275,6 +375,8 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
     if(p->cycles >= 341) {
         p->cycles = 0;
         p->scanline++;
+
+        if(p->scanline < 241) evaluate_sprites(p);
 
         //Enter VBlank
         if(p->scanline == 241) {

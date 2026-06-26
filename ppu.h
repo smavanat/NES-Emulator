@@ -49,15 +49,25 @@ typedef enum {
 } mirroring;
 
 typedef struct {
+    uint8_t y;
+    uint8_t tile;
+    uint8_t attributes;
+    uint8_t x;
+    uint8_t oam_index;
+} sprite_entry;
+
+typedef struct {
     uint8_t vram[2048];
     uint8_t oam_data[256];
     uint8_t palette_table[32];
+    sprite_entry secondary_oam[8];
     uint8_t *chr_rom;
     addr_register *addr_reg;
     scroll_register *scroll_reg;
     size_t cycles;
     size_t chr_rom_sz;
     uint16_t scanline;
+    uint8_t secondary_oam_count;
     uint8_t ctrl_reg;
     uint8_t mask_reg;
     uint8_t status_reg;

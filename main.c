@@ -131,7 +131,7 @@ int main(void) {
     c.proc_stat_reg = 0x34;
 
     uint8_t *buf;
-    int sz = read_to_end("../pacman.nes", &buf, 0);
+    int sz = read_to_end("../nestest.nes", &buf, 0);
     if(sz < 0) {
         fprintf(stderr, "Error when opening a file\n");
         return 0;
@@ -155,9 +155,6 @@ int main(void) {
             set_pc(&c, 0xFFFC); //Resetting the pc
             printf("RESET VECTOR = %02X %02X\n", mem_read(c.b, 0xFFFC), mem_read(c.b, 0xFFFD));
             printf("Reset vector: %04X\n", c.pc);
-            // mem_write(c.b, 0x2000, 0x80);
-            // mem_write(c.b, 0x2006, 0x20);
-            // mem_write(c.b, 0x2007, 0x01);
             c.b->p->chr_rom = c.b->rom->chr_rom;
             c.b->p->chr_rom_sz = c.b->rom->chr_rom_sz;
             c.b->p->mirroring = c.b->rom->mirroring;
