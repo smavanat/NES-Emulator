@@ -262,6 +262,14 @@ void evaluate_sprites(ppu *p) {
     }
 }
 
+//Mapper 4 has its own IRQ which needs to be handled on its own at the start of every scanline
+void mapper_4_scanline(rom *r) {
+    if(r->mapper_registers[3] == 0) r->mapper_registers[3] = r->mapper_registers[2]; //Reload from latch
+    else r->mapper_registers[3]--;
+
+    if(r->mapper_registers[3] == 0 && r->mapper_registers[4]) r->irq_pending = 1; //Signal IRQ to CPU
+}
+
 //Represents the ppu operations every clock cycle
 uint8_t ppu_tick(ppu *p, frame *fr) {
     //Draw a pixel
@@ -412,7 +420,10 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
         p->cycles = 0;
         p->scanline++;
 
-        if(p->scanline < 241) evaluate_sprites(p);
+        if(p->scanline < 241) {
+            evaluate_sprites(p);
+            if(p->rom->mapper == 4) mapper_4_scanline(p->rom);
+        }
 
         //Enter VBlank
         if(p->scanline == 241) {

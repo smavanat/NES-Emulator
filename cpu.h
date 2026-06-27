@@ -150,11 +150,15 @@ typedef struct {
 } instruction;
 
 void set_pc(cpu *c, uint16_t addr);
+uint8_t get_cpu_flag(cpu *c, cpu_flag fl);
+//Sets a cpu flag to a 1 if the given condition is true, other wise 0
+void set_cpu_flag(cpu *c, cpu_flag fl, uint8_t cond);
 void print_page(cpu *c, uint8_t page_num);
 void print_stack(cpu *c);
 void print_cpu_state(cpu *c);
 size_t execute_instr(cpu *c);
 void interrupt_nmi(cpu *c);
+void interrupt_irq(cpu *c);
 
 //Array holding all of the instructions for the 6502
 extern instruction instructions[256];

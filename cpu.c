@@ -358,6 +358,16 @@ uint16_t get_indirect_add(cpu *c, uint8_t start) {
     return (((uint16_t)hi) << 8) | lo;
 }
 
+void interrupt_irq(cpu *c) {
+    if(get_cpu_flag(c, INTERRUPT_DISABLE)) return;
+    push_pc(c);
+    push(c, (c->proc_stat_reg & ~(1 << 4) | (1 << 5)));
+    set_cpu_flag(c, INTERRUPT_DISABLE, 1);
+
+    set_pc(c, 0xFFFE);
+    c->b->p->rom->irq_pending = 0;
+}
+
 void interrupt_nmi(cpu *c) {
     push_pc(c);
     push(c, (c->proc_stat_reg & ~(1 << 4) | (1 << 5)));

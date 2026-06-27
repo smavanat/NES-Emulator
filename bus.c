@@ -265,6 +265,147 @@ void mapper_2_ppu_write(rom *r, uint16_t addr, uint8_t val) {
     else fprintf(stderr, "ERROR: Attempting to write to CHR ROM\n");
 }
 
+//Functions for mapper 3 (CNROM)
+uint8_t mapper_3_cpu_read(rom *r, uint16_t addr) {
+    uint16_t offset = addr - 0x8000;
+    if(r->prg_rom_sz == 0x4000) offset %= 0x4000;
+    return r->prg_rom[offset];
+}
+void mapper_3_cpu_write(rom *r, uint16_t addr, uint8_t val) {
+    uint16_t offset = addr - 0x8000;
+    if(r->prg_rom_sz == 0x4000) offset %= 0x4000;
+    r->mapper_registers[0] = val & r->prg_rom[offset];
+}
+uint8_t mapper_3_ppu_read(rom *r, uint16_t addr) {
+    return r->chr_rom[((r->mapper_registers[0] & 0x3) * 0x2000) + addr];
+}
+void mapper_3_ppu_write(rom *r, uint16_t addr, uint8_t val) {
+    fprintf(stderr, "ERROR: Attempting to write to CHR ROM\n");
+}
+
+//Functions for mapper 4 (MMC3)
+//Register layout:
+//[0] = bank select ($8000 even)
+//[1] = mirroring ($A000 even)
+//[2] = IRQ latch ($C000 even)
+//[3] = IRQ counter
+//[4] = IRQ enabled
+//[5-12] = bank registers R0-R7
+//TODO: Implement PRG RAM?
+uint8_t mapper_4_cpu_read(rom *r, uint16_t addr) {
+    uint8_t prg_mode = (r->mapper_registers[0] >> 6) & 0x01;
+
+    uint32_t offset;
+    if(addr <= 0x9FFF) {
+        if(prg_mode == 0) offset = (r->mapper_registers[11] & 0x3F) * 0x2000 + (addr - 0x8000); //R6 switchable
+        else offset = (r->prg_rom_sz - 0x4000) + (addr - 0x8000); //Fixed to second to last bank
+    }
+    else if(addr <= 0xBFFF) {
+        offset = (r->mapper_registers[12] & 0x3F) * 0x2000 + (addr - 0xA000); //R7 always switchable
+    }
+    else if(addr <= 0xDFFF) {
+        if(prg_mode == 0) offset = (r->prg_rom_sz - 0x4000) + (addr - 0xC000); //Fixed to second to last bank
+        else offset = (r->mapper_registers[11] & 0x3F) * 0x2000 + (addr - 0xC000); //R6 switchable
+    }
+    else {
+        offset = (r->prg_rom_sz - 0x2000) + (addr - 0xE000); //Always switched to last bank
+    }
+
+    return r->prg_rom[offset % r->prg_rom_sz];
+}
+//Each 2KB range (0x8000 - 0x9FFF, 0xA000 - 0xBFFF, 0xC000 - 0xDFFF, 0xE000 - 0xFFFF)
+//Maps to a pair of registers. Which of the pair is being mapped to is determined by the parity
+//(odd/even) of the address
+//More info: https://www.nesdev.org/wiki/MMC3#Registers
+void mapper_4_cpu_write(rom *r, uint16_t addr, uint8_t val) {
+    if(addr <= 0x9FFF) {
+        if(addr % 2 == 0) r->mapper_registers[0] = val; //Bank select
+        //Bank data: write to register selected by bits 0-2 of register 0
+        else r->mapper_registers[5 + (r->mapper_registers[0] & 0x07)] = val;
+    }
+    else if(addr <= 0xBFFF) {
+        //Nametable arrangement. Does not affect cartridges with hardwired fourscreen mirroring
+        if(addr % 2 == 0 && r->mirroring != MIR_FOURSCREEN) {
+            r->mapper_registers[1] = val;
+            r->mirroring = (val & 0x1) ? MIR_VERTICAL : MIR_HORIZONTAL;
+        }
+        //Odd is PRG RAM protection. Not currently implemented
+    }
+    else if(addr <= 0xDFFF) {
+        //Even sets IRQ latch value
+        if(addr % 2 == 0) r->mapper_registers[2] = val;
+        //Clear IRQ counter so it reloads from latch on next scanline
+        else r->mapper_registers[3] = 0;
+    }
+    else if(addr <= 0xFFFF) {
+        //IRQ disable
+        if(addr % 2 == 0) {
+            r->mapper_registers[4] = 0;
+            r->irq_pending = 0;
+        }
+        else {
+            r->mapper_registers[4] = 1;
+        }
+    }
+}
+uint8_t mapper_4_ppu_read(rom *r, uint16_t addr) {
+    uint8_t chr_mode = r->mapper_registers[0] & 0x80;
+    uint32_t offset;
+
+    if(!chr_mode) {
+        //R0: 2KB CHR bank from 0x0000 - 0x07FF
+        if(addr < 0x800) offset = r->mapper_registers[5] * 0x800 + addr;
+        //R1: 2KB CHR bank from 0x0800 - 0x0FFF
+        if(addr < 0x1000) offset = r->mapper_registers[6] * 0x800 + (addr - 0x0800);
+        //R2: 1KB CHR bank from 0x1000 - 0x13FF
+        if(addr < 0x1400) offset = r->mapper_registers[7] * 0x400 + (addr - 0x1000);
+        //R3: 1KB CHR bank from 0x1400 - 0x17FF
+        if(addr < 0x1800) offset = r->mapper_registers[8] * 0x400 + (addr - 0x1400);
+        //R4: 1KB CHR bank from 0x1800 - 0x1BFF
+        if(addr < 0x1C00) offset = r->mapper_registers[9] * 0x400 + (addr - 0x1800);
+        //R5: 1KB CHR bank from 0x1C00 - 0x1FFF
+        if(addr < 0x2000) offset = r->mapper_registers[10] * 0x400 + (addr - 0x1C00);
+    }
+    else {
+        //R0: 1KB CHR bank from 0x0000 - 0x03FF
+        if(addr < 0x400) offset = r->mapper_registers[5] * 0x400 + addr;
+        //R1: 1KB CHR bank from 0x0400 - 0x07FF
+        if(addr < 0x0800) offset = r->mapper_registers[6] * 0x400 + (addr - 0x0400);
+        //R2: 1KB CHR bank from 0x0800 - 0x0BFF
+        if(addr < 0x0C00) offset = r->mapper_registers[7] * 0x400 + (addr - 0x0800);
+        //R3: 1KB CHR bank from 0x0C00 - 0x0FFF
+        if(addr < 0x1000) offset = r->mapper_registers[8] * 0x400 + (addr - 0x0C00);
+        //R4: 2KB CHR bank from 0x1000 - 0x17FF
+        if(addr < 0x1800) offset = r->mapper_registers[9] * 0x400 + (addr - 0x1000);
+        //R5: 2KB CHR bank from 0x1800 - 0x1FFF
+        if(addr < 0x2000) offset = r->mapper_registers[10] * 0x400 + (addr - 0x1800);
+    }
+
+    if(r->chr_rom_sz == 0) return r->chr_rom[offset % 8192]; //CHR RAM
+    else return r->chr_rom[offset % r->chr_rom_sz]; //CHR ROM
+}
+void mapper_4_ppu_write(rom *r, uint16_t addr, uint8_t val) {
+    // If chr_rom_sz == 0, treat at RAM
+    if(r->chr_rom_sz == 0) r->chr_rom[addr % 8192] = val;
+    else fprintf(stderr, "ERROR: Attempting to write to CHR ROM\n");
+}
+
+//Functions for mapper 7 (AxROM)
+//Map rom.mapper_registers[0] to be the bank select register
+uint8_t mapper_7_cpu_read(rom *r, uint16_t addr) {
+    return r->prg_rom[(((r->mapper_registers[0] & 0x7) * 0x8000) + (addr - 0x8000)) % r->prg_rom_sz];
+}
+void mapper_7_cpu_write(rom *r, uint16_t addr, uint8_t val) {
+    r->mapper_registers[0] = val;
+    r->mirroring = (r->mapper_registers[0] & 0x10) ? MIR_ONESCREEN_HI : MIR_ONESCREEN_LO;
+}
+uint8_t mapper_7_ppu_read(rom *r, uint16_t addr) {
+    return r->chr_rom[addr % 8192];
+}
+void mapper_7_ppu_write(rom *r, uint16_t addr, uint8_t val) {
+    r->chr_rom[addr % 8192] = val;
+}
+
 int assign_rom_functions(rom *r) {
     switch (r->mapper) {
         case 0:
@@ -281,12 +422,30 @@ int assign_rom_functions(rom *r) {
             r->cpu_write = mapper_1_cpu_write;
             r->ppu_read = mapper_1_ppu_read;
             r->ppu_write = mapper_1_ppu_write;
+        break;
         case 2:
             r->cpu_read = mapper_2_cpu_read;
             r->cpu_write = mapper_2_cpu_write;
             r->ppu_read = mapper_2_ppu_read;
             r->ppu_write = mapper_2_ppu_write;
         break;
+        case 3:
+            r->cpu_read = mapper_3_cpu_read;
+            r->cpu_write = mapper_3_cpu_write;
+            r->ppu_read = mapper_3_ppu_read;
+            r->ppu_write = mapper_3_ppu_write;
+        break;
+        case 4:
+            r->cpu_read = mapper_4_cpu_read;
+            r->cpu_write = mapper_4_cpu_write;
+            r->ppu_read = mapper_4_ppu_read;
+            r->ppu_write = mapper_4_ppu_write;
+        break;
+        case 7:
+            r->cpu_read = mapper_7_cpu_read;
+            r->cpu_write = mapper_7_cpu_write;
+            r->ppu_read = mapper_7_ppu_read;
+            r->ppu_write = mapper_7_ppu_write;
         default:
             return 0;
     }
@@ -299,10 +458,10 @@ int assign_rom_functions(rom *r) {
 //      Mapper 0 (NROM) -> DONE
 //      Mapper 1 (MMC1) -> DONE
 //      Mapper 2 (UxROM) -> DONE
-//      Mapper 3 (CNROM) -> TODO
-//      Mapper 4 (MMC3) -> TODO
+//      Mapper 3 (CNROM) -> DONE
+//      Mapper 4 (MMC3) -> DONE
 //      Mapper 5 (MMC5) -> TODO
-//      Mapper 7 (AxROM) -> TODO
+//      Mapper 7 (AxROM) -> DONE
 //      Mapper 9 (MMC2) -> TODO
 //      Mapper 11 (Color Dreams) -> TODO
 //      Mapper 19 (Namco 163) -> TODO
@@ -319,6 +478,10 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
         return 1;
     }
 
+    if(buf[6] & 0b1000) r->mirroring = MIR_FOURSCREEN;
+    else if(buf[6] & 0b1) r->mirroring = MIR_VERTICAL;
+    else r->mirroring = MIR_HORIZONTAL;
+
     r->mapper = (buf[7] & 0xF0) | (buf[6] >> 4);
     if(!assign_rom_functions(r)) {
         fprintf(stderr, "Mapper %hhu not supported\n", r->mapper);
@@ -330,10 +493,6 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
         fprintf(stderr, "NES2.0 format is not supported\n");
         return 1;
     }
-
-    if(buf[6] & 0b1000) r->mirroring = MIR_FOURSCREEN;
-    else if(buf[6] & 0b1) r->mirroring = MIR_VERTICAL;
-    else r->mirroring = MIR_HORIZONTAL;
 
     r->prg_rom_sz = buf[4] * PRG_PAGE_SIZE;
     r->chr_rom_sz = buf[5] * CHR_PAGE_SIZE;

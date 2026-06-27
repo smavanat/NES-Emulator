@@ -78,7 +78,8 @@ struct rom {
     //Mapper state
     uint8_t prg_bank;
     uint8_t chr_bank;
-    uint8_t mapper_registers[8];
+    uint8_t irq_pending;
+    uint8_t mapper_registers[16];
 };
 
 int rom_load(rom *r, uint8_t *buf, int buf_len);

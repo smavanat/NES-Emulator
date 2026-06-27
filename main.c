@@ -1,19 +1,57 @@
+#define _XOPEN_SOURCE 500 //Needed to get deprecated functions
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 199309L  // must come first
+#endif
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include "cpu.h"
 #include "externals/glad.h"
 #include "externals/GLFW/glfw3.h"
 #include "joypad.h"
 #include "ppu.h"
 
+#define FRAME_RATE 1000 / 60.0f
+
 //TODO: Comments
 uint8_t stop = 0;
 GLFWwindow *window;
 cpu c = {0};
 Renderer r = {0};
+
+//Thank you Bernardo: https://stackoverflow.com/questions/1157209/is-there-an-alternative-sleep-function-in-c-to-milliseconds
+#ifdef WIN32
+#include <windows.h>
+#else
+#include <time.h>   // for nanosleep
+#include <unistd.h> // for usleep
+#endif
+
+/**
+ * Cross-platform sleep function
+ * @param milliseconds the time the thread should sleep for in milliseconds
+ */
+void sleep_ms(int milliseconds){
+#ifdef WIN32
+    Sleep(milliseconds);
+#else
+#if defined(_POSIX_VERSION) && (POSIX_VERSION >= 199309L)
+    struct timespec ts;
+    ts.tv_sec = milliseconds / 1000;
+    ts.tv_nsec = (milliseconds % 1000) * 1000000;
+    nanosleep(&ts, NULL);
+#else
+    if (milliseconds >= 1000)
+      sleep(milliseconds / 1000);
+    usleep((milliseconds % 1000) * 1000);
+#endif
+#endif
+}
+
 
 int read_to_end(char const *path, uint8_t **buf, uint8_t add_null) {
     FILE *fp;
@@ -206,6 +244,9 @@ int main(void) {
         c.b->player_2 = calloc(1, sizeof(joypad));
         r = render_init();
 
+        struct timeval stop, start; //Store the start and end times of a frame
+        float dt = 0.0f; //Holds the time passed between frames
+
         if(!rom_load(c.b->rom, buf, sz)) {
             printf("Loaded\n");
             free(buf);
@@ -219,6 +260,8 @@ int main(void) {
             uint8_t curr_frame = 0;
 
             while(!glfwWindowShouldClose(window) && !c.stop) {
+                gettimeofday(&start, NULL);
+
                 glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
                 glClear(GL_COLOR_BUFFER_BIT);
 
@@ -242,7 +285,11 @@ int main(void) {
                     }
 
                     size_t cycles;
-                    if(c.b->p->nmi_triggered) {
+                    if(c.b->p->rom->irq_pending && !get_cpu_flag(&c, INTERRUPT_DISABLE)) {
+                        cycles = 7;
+                        interrupt_irq(&c);
+                    }
+                    else if(c.b->p->nmi_triggered) {
                         cycles = 7;
                         interrupt_nmi(&c);
                     }
@@ -261,6 +308,14 @@ int main(void) {
 
                 glfwSwapBuffers(window);
                 glfwPollEvents();
+
+                gettimeofday(&stop, NULL); //Get the time at the end of the frame
+                dt = (stop.tv_sec - start.tv_sec) * 1000 + (stop.tv_usec - start.tv_usec) / 1000.0f; //Get the frame length
+                // If the frame took less time than the set frame rate, wait until the time is the frame rate
+                if(dt < FRAME_RATE) {
+                    sleep_ms((int)FRAME_RATE - dt);
+                    dt = FRAME_RATE;
+                }
             }
             glfwTerminate();
 
