@@ -46,6 +46,8 @@ typedef enum {
     MIR_VERTICAL,
     MIR_HORIZONTAL,
     MIR_FOURSCREEN,
+    MIR_ONESCREEN_LO,
+    MIR_ONESCREEN_HI,
 } mirroring;
 
 typedef struct {
@@ -56,12 +58,37 @@ typedef struct {
     uint8_t oam_index;
 } sprite_entry;
 
+typedef struct rom rom;
+
+struct rom {
+    size_t prg_rom_sz;
+    size_t chr_rom_sz;
+    uint8_t *prg_rom;
+    uint8_t *chr_rom;
+
+    //Virtual function pointers for mapper specific behaviours
+    uint8_t (*cpu_read)(rom *r, uint16_t addr);
+    void (*cpu_write)(rom *r, uint16_t addr, uint8_t val);
+    uint8_t (*ppu_read)(rom *r, uint16_t addr);
+    void (*ppu_write)(rom *r, uint16_t addr, uint8_t val);
+
+    uint8_t mapper;
+    mirroring mirroring;
+
+    //Mapper state
+    uint8_t prg_bank;
+    uint8_t chr_bank;
+    uint8_t mapper_registers[8];
+};
+
+int rom_load(rom *r, uint8_t *buf, int buf_len);
+
 typedef struct {
     uint8_t vram[2048];
     uint8_t oam_data[256];
     uint8_t palette_table[32];
     sprite_entry secondary_oam[8];
-    uint8_t *chr_rom;
+    rom *rom;
     addr_register *addr_reg;
     scroll_register *scroll_reg;
     size_t cycles;
@@ -77,7 +104,6 @@ typedef struct {
     uint8_t internal_data_buf;
     uint8_t nmi_triggered;
     uint8_t odd_frame;
-    mirroring mirroring;
 } ppu;
 
 #define FRAME_WIDTH 256

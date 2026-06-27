@@ -13,24 +13,17 @@
 #define CHR_PAGE_SIZE 8192
 
 typedef struct {
-    size_t prg_rom_sz;
-    size_t chr_rom_sz;
-    uint8_t *prg_rom;
-    uint8_t *chr_rom;
-    uint8_t mapper;
-    mirroring mirroring;
-} rom;
-
-int rom_load(rom *r, uint8_t *buf, int buf_len);
-
-typedef struct {
+    //Memory reachable from the bus
     uint8_t cpu_vram[2048];
     rom *rom;
     ppu *p;
+
+    //User input handled through the bus
     joypad *player_1;
     joypad *player_2;
-    uint64_t total_cycles;
-    uint16_t dma_stall;
+
+    uint64_t total_cycles; //Total cycles elapsed since program start
+    uint16_t dma_stall; //Whether the cpu needs to be stalled to transport data via DMA
 } bus;
 
 uint8_t mem_read(bus *b, uint16_t addr);

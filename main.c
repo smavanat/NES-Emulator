@@ -213,9 +213,8 @@ int main(void) {
             set_pc(&c, 0xFFFC); //Resetting the pc
             printf("RESET VECTOR = %02X %02X\n", mem_read(c.b, 0xFFFC), mem_read(c.b, 0xFFFD));
             printf("Reset vector: %04X\n", c.pc);
-            c.b->p->chr_rom = c.b->rom->chr_rom;
+            c.b->p->rom = c.b->rom;
             c.b->p->chr_rom_sz = c.b->rom->chr_rom_sz;
-            c.b->p->mirroring = c.b->rom->mirroring;
             frame tile_frame[2] = {{0}, {0}};
             uint8_t curr_frame = 0;
 

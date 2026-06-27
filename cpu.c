@@ -359,7 +359,6 @@ uint16_t get_indirect_add(cpu *c, uint8_t start) {
 }
 
 void interrupt_nmi(cpu *c) {
-    printf("NMI fired! PC=%04X, $0040=%02X\n", c->pc, mem_read(c->b, 0x0040));
     push_pc(c);
     push(c, (c->proc_stat_reg & ~(1 << 4) | (1 << 5)));
     set_cpu_flag(c, INTERRUPT_DISABLE, 1);

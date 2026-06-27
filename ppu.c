@@ -99,9 +99,11 @@ uint16_t ppu_mirror_vram_addr(ppu *p, uint16_t addr) {
     uint16_t mirrored_vram = addr & 0x2fff; //Mirror down 0x3000-0x3eff to 0x2000-0x2eff
     uint16_t vram_index = mirrored_vram - 0x2000; //To vram vector
     uint16_t name_table_index = vram_index / 0x400; //To name table index
-    if(p->mirroring == MIR_VERTICAL && (name_table_index == 2 || name_table_index == 3)) vram_index -= 0x800;
-    else if(p->mirroring == MIR_HORIZONTAL && (name_table_index == 2 || name_table_index == 1)) vram_index -= 0x400;
-    else if(p->mirroring == MIR_HORIZONTAL && name_table_index == 3) vram_index -= 0x800;
+    if(p->rom->mirroring == MIR_VERTICAL && (name_table_index == 2 || name_table_index == 3)) vram_index -= 0x800;
+    else if(p->rom->mirroring == MIR_HORIZONTAL && (name_table_index == 2 || name_table_index == 1)) vram_index -= 0x400;
+    else if(p->rom->mirroring == MIR_HORIZONTAL && name_table_index == 3) vram_index -= 0x800;
+    else if(p->rom->mirroring == MIR_ONESCREEN_LO) vram_index &= 0x3FF; //Always map to first 1KB
+    else if(p->rom->mirroring == MIR_ONESCREEN_HI) vram_index = 0x400 + (vram_index & 0x3FF); //Always map to second 1KB
 
     return vram_index;
 }
@@ -109,7 +111,7 @@ uint16_t ppu_mirror_vram_addr(ppu *p, uint16_t addr) {
 uint8_t ppu_bus_read(ppu *p, uint16_t addr) {
     addr &= 0x3FFF; //Make sure it is in the 16kb range
 
-    if(addr <= 0x1FFF) return p->chr_rom[addr];
+    if(addr <= 0x1FFF) return p->rom->ppu_read(p->rom, addr);
     if(addr <= 0x2FFF) return p->vram[ppu_mirror_vram_addr(p, addr)];
     if(addr <= 0x3EFF) return ppu_bus_read(p, addr - 0x1000);
     if(addr <= 0x3FFF) {
@@ -153,7 +155,7 @@ void ppu_bus_write(ppu *p, uint16_t addr, uint8_t val) {
 
     //CHR ROM, ignore writes. If we do CHR RAM can do writes here later
     if(addr <= 0x1FFF) {
-        return;
+        p->rom->ppu_write(p->rom, addr, val);
     }
     //Nametables
     if(addr <= 0x2FFF) {
@@ -291,7 +293,7 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
         uint16_t tile = ppu_bus_read(p, nametable_base + tile_y * 32 + tile_x);
 
         //Get the colour used for the tile
-        uint8_t colour = get_tile_pixel(p->chr_rom, bank, tile, pixel_x, pixel_y);
+        uint8_t colour = get_tile_pixel(p->rom->chr_rom, bank, tile, pixel_x, pixel_y);
 
         //Get the palette
         uint8_t pal[3] = {0};
@@ -364,7 +366,7 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
             }
 
             //Get the pixel colour index
-            uint8_t sprite_colour = get_tile_pixel(p->chr_rom, pat_table, tile_idx, px, py);
+            uint8_t sprite_colour = get_tile_pixel(p->rom->chr_rom, pat_table, tile_idx, px, py);
 
             //0 means transparent for sprites
             if(sprite_colour == 0) continue;
