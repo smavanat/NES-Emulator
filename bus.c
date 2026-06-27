@@ -119,6 +119,7 @@ void mem_write(bus *b, uint16_t addr, uint8_t val) {
 }
 
 //TODO: Add support for NES2.0
+//      Add support for different mapper types
 int rom_load(rom *r, uint8_t *buf, int buf_len) {
     if(buf_len < 16) {
         fprintf(stderr, "ROM is too small to contain an iNES header\n");

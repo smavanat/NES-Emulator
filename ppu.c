@@ -210,9 +210,8 @@ void set_frame_pixel(frame *fr, int x, int y, uint8_t rgb[3]) {
     }
 }
 
-void bg_palette(ppu *p, size_t tile_x, size_t tile_y, uint8_t *colour) {
+void bg_palette(ppu *p, uint16_t nametable_base, size_t tile_x, size_t tile_y, uint8_t *colour) {
     size_t attr_table_idx = tile_y / 4 * 8 + tile_x / 4;
-    uint16_t nametable_base = 0x2000 + ((p->ctrl_reg & 0x03) * 0x400);
     uint8_t attr_byte = ppu_bus_read(p, nametable_base + 0x3C0 + attr_table_idx);
     uint8_t palette_idx;
 
@@ -268,15 +267,25 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
         //Drawing background
         uint8_t bank = get_ppu_ctrl_reg_flag(p, PPU_CR_BACKGROUND_PATTERN_ADDR); //Get the bank to get the tile from
 
+        //Get the scroll position:
+        uint8_t scroll_x = p->scroll_reg->xscroll;
+        uint8_t scroll_y = p->scroll_reg->yscroll;
+
+        //Get the absolute screen position
+        size_t abs_x = p->cycles + scroll_x;
+        size_t abs_y = p->scanline + scroll_y;
+
         //Get the tile position
-        size_t tile_x = p->cycles / 8;
-        size_t tile_y = p->scanline / 8;
+        size_t tile_x = (abs_x % FRAME_WIDTH) / 8;
+        size_t tile_y = (abs_y % FRAME_HEIGHT) / 8;
 
         //Get the pixel position
-        size_t pixel_x = p->cycles % 8;
-        size_t pixel_y = p->scanline % 8;
+        size_t pixel_x = abs_x % 8;
+        size_t pixel_y = abs_y % 8;
 
         uint16_t nametable_base = 0x2000 + ((p->ctrl_reg & 0x03) * 0x400);
+        if(abs_x >= FRAME_WIDTH) nametable_base ^= 0x0400; //Horizontal flip if scroll crosses horizontal boundary
+        if(abs_y >= FRAME_HEIGHT) nametable_base ^= 0x0800; //Vertical flip if scroll crosses vertical boundary
 
         //Get the tile
         uint16_t tile = ppu_bus_read(p, nametable_base + tile_y * 32 + tile_x);
@@ -286,7 +295,7 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
 
         //Get the palette
         uint8_t pal[3] = {0};
-        bg_palette(p, tile_x, tile_y, pal);
+        bg_palette(p, nametable_base, tile_x, tile_y, pal);
 
         //Draw the pixel to the frame
         switch (colour) {
@@ -381,6 +390,8 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
         //Enter VBlank
         if(p->scanline == 241) {
             set_ppu_stat_reg_flag(p, PPU_STAT_VBLANK, 1);
+            set_ppu_stat_reg_flag(p, PPU_STAT_SPRITE_ZERO_HIT, 0);
+            set_ppu_stat_reg_flag(p, PPU_STAT_SPRITE_OVERFLOW, 0);
             if(get_ppu_ctrl_reg_flag(p, PPU_CR_GENERATE_NMI)) {
                 p->nmi_triggered = 1;
             }
