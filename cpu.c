@@ -4,8 +4,6 @@
 #include "bus.h"
 #include "cpu.h"
 
-//TODO: IMPLEMENT UNOFFICIAL OPCODES
-
 //Since every NES instruction has a disassemly value between 0x00 and 0xFF, can just make a 256 value array storing all the  opcodes,
 //addressing mode, and cycle count for every instruction as a very quick way of getting an instruction from its machine code value
 instruction instructions[256] = {
@@ -437,16 +435,12 @@ uint16_t get_argument(cpu *c, address_mode mode, uint8_t get_val, size_t *cycles
             break;
     }
 
-    // printf("Address: %04X\n", addr);
 
-    // return get_val ? c->memory[addr] : addr;
     return get_val ? mem_read(c->b, addr) : addr;
 }
 
 size_t execute_instr(cpu *c) {
-    // printf("BEFORE: PC=%04X\n", c->pc);
     uint8_t op = fetch_byte(c);
-    // printf("PC: %04X | Opcode: %02X\n", c->pc, op);
     instruction instr = instructions[op];
     size_t cycles = instr.num_cycles;
 
@@ -843,16 +837,252 @@ size_t execute_instr(cpu *c) {
             break;
         //Do nothing. Its in the name
         case NOP:
+            //Some of the invalid NOP-like operations still change the pc and consume bytes when addressing
+            //So make an unused called to get_argument to simulate this
+            get_argument(c, instr.addr_mode, 0, &cycles);
             break;
+        //============================Illegal opcodes=============================
         //Stop the program early
         case STP:
             c->stop = 1;
             break;
+        //ASL + ORA
+        case SLO: {
+            //ASL
+            uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+            uint8_t val = mem_read(c->b, param);
+            set_cpu_flag(c, CARRY, val & 0x80);
+            val <<= 1;
+            mem_write(c->b, param, val);
+
+            //ORA
+            c->acc |= val;
+            set_cpu_flag(c, ZERO, c->acc == 0);
+            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+        }
+        break;
+        //AND then set carry flag to bit 7
+        case ANC: {
+            //AND
+            uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
+            c->acc &= param;
+            set_cpu_flag(c, ZERO, c->acc == 0);
+            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+
+            //Setting carry flag to bit 7
+            set_cpu_flag(c, CARRY, c->acc & 0x80);
+        }
+        break;
+        //ROL + AND
+        case RLA: {
+            //ROL
+            uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+            uint8_t old_carry = get_cpu_flag(c, CARRY);
+            uint8_t val = mem_read(c->b, param);
+            set_cpu_flag(c, CARRY, val & 0x80);
+            val <<= 1;
+            val |= old_carry;
+            mem_write(c->b, param, val);
+
+            //AND
+            c->acc &= val;
+            set_cpu_flag(c, ZERO, c->acc == 0);
+            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+        }
+        break;
+        //LSR + XOR
+        case SRE: {
+            //LSR
+            uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+            uint8_t val = mem_read(c->b, param);
+            set_cpu_flag(c, CARRY, val & 0x1);
+            val >>= 1;
+            mem_write(c->b, param, val);
+            set_cpu_flag(c, ZERO, val == 0);
+            set_cpu_flag(c, NEGATIVE, 0);
+
+            //XOR
+            c->acc ^= val;
+            set_cpu_flag(c, ZERO, c->acc == 0);
+            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+        }
+        break;
+        //AND + LSR
+        case ALR: {
+            //AND
+            uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
+            c->acc &= param;
+
+            //LSR
+            set_cpu_flag(c, CARRY, c->acc & 0x1);
+            c->acc >>= 1;
+            set_cpu_flag(c, ZERO, c->acc == 0);
+            set_cpu_flag(c, NEGATIVE, 0);
+        }
+        break;
+        //AND then ROR
+        case ARR:{
+            //AND
+            uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
+            c->acc &= param;
+
+            //ROR:
+            uint8_t old_carry = get_cpu_flag(c, CARRY);
+            set_cpu_flag(c, CARRY, (c->acc & 0x1));
+            c->acc >>= 1;
+            c->acc |= (old_carry << 7);
+            set_cpu_flag(c, ZERO, c->acc == 0);
+            set_cpu_flag(c, NEGATIVE, c->acc & 0x80);
+        }
+        break;
+        //ROR + ADC
+        case RRA: {
+            //ROR
+            uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+            uint8_t old_carry = get_cpu_flag(c, CARRY);
+            uint8_t val = mem_read(c->b, param);
+            set_cpu_flag(c, CARRY, val & 0x1);
+            val >>= 1;
+            val |= (old_carry << 7);
+            mem_write(c->b, param, val);
+
+            //ADC
+            uint16_t sum = c->acc + val + get_cpu_flag(c, CARRY);
+            uint8_t trunc_sum = (uint8_t)sum;
+            set_cpu_flag(c, CARRY, sum > 0xFF);
+            set_cpu_flag(c, ZERO, trunc_sum == 0);
+            set_cpu_flag(c, OVERFLOW, (~(c->acc ^ val) & (c->acc ^ trunc_sum) & 0x80));
+            set_cpu_flag(c, NEGATIVE,  trunc_sum & 0x80);
+            c->acc = trunc_sum;
+        }
+        break;
+        //A AND X stored in some memory location
+        case SAX: {
+            uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+            uint8_t val = c->acc & c->x;
+            mem_write(c->b, param, val);
+        }
+        break;
+        //Apparently you shouldn't use this instruction: https://masswerk.at/nowgobang/2021/6502-illegal-opcodes
+        //(A OR CONST) AND X AND oper -> A
+        //Where const is one of 0x00, 0xFF, 0xEE, or others, depending on the chip series/temperature
+        //I am just going to default it to 0xFF for now
+        case XAA: {
+            uint8_t cnst = 0xFF;
+            uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
+            c->acc = (c->acc | cnst) & c->x & param;
+
+            set_cpu_flag(c, ZERO, c->acc == 0);
+            set_cpu_flag(c, NEGATIVE, c->acc & 0x80);
+        }
+        break;
+        //Stores ACC AND X AND (High byte of memory address + 1) at the given memory address
+        case AHX: {
+            uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+            uint8_t hi = (param & 0xFF00) >> 8;
+            uint8_t val = c->acc & c->x & (hi + 1);
+            mem_write(c->b, param, val);
+
+            set_cpu_flag(c, ZERO, val == 0);
+            set_cpu_flag(c, NEGATIVE, val & 0x80);
+        }
+        break;
+        //A AND X -> SP, A AND X AND (high byte of memory address + 1) at address
+        case TAS: {
+            c->sp = c->acc & c->x;
+
+            uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+            uint8_t hi = (param & 0xFF00) >> 8;
+            uint8_t val = c->acc & c->x & (hi + 1);
+            mem_write(c->b, param, val);
+
+            set_cpu_flag(c, ZERO, val == 0);
+            set_cpu_flag(c, NEGATIVE, val & 0x80);
+        }
+        break;
+        //LDA + LDX
+        case LAX:
+            c->acc = get_argument(c, instr.addr_mode, 1, &cycles);
+            c->x = c->acc;
+            set_cpu_flag(c, ZERO, c->acc == 0);
+            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            break;
+        //Memory AND SP -> A, X, SP
+        case LAS: {
+            uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
+            param &= c->sp;
+            c->acc = param;
+            c->x = param;
+            c->sp = param;
+
+            set_cpu_flag(c, ZERO, param == 0);
+            set_cpu_flag(c, NEGATIVE, (param & 0x80));
+        }
+        break;
+        //DEC + CMP
+        case DCP: {
+            //DEC
+            uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+            uint8_t val = mem_read(c->b, param);
+            val--;
+            mem_write(c->b, param, val);
+
+            //CMP
+            compare(c, c->acc, val);
+        }
+        break;
+        //CMP and DEC simultaneously
+        case AXS: {
+            uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
+            uint8_t val = c->acc & c->x;
+            compare(c, val, param);
+            c->x = val - param;
+        }
+        break;
+        //INC + SBC
+        case ISC: {
+            //INC
+            uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+            uint8_t val = mem_read(c->b, param);
+            val++;
+            mem_write(c->b, param, val);
+
+            //SBC
+            uint16_t sum = c->acc - val - !get_cpu_flag(c, CARRY);
+            uint8_t trunc_sum = (uint8_t)sum;
+            set_cpu_flag(c, CARRY, !(sum > 0xFF));
+            set_cpu_flag(c, ZERO, trunc_sum == 0);
+            set_cpu_flag(c, OVERFLOW, (c->acc ^ trunc_sum) & (trunc_sum ^ ~val) & 0x80);
+            set_cpu_flag(c, NEGATIVE,  trunc_sum & 0x80);
+            c->acc = trunc_sum;
+        }
+        break;
+        //Stores X and (high byte of memory address + 1) at given memory address
+        case SHX: {
+            uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+            uint8_t hi = (param & 0xFF00) >> 8;
+            uint8_t val = c->x & (hi + 1);
+            mem_write(c->b, param, val);
+
+            set_cpu_flag(c, ZERO, val == 0);
+            set_cpu_flag(c, NEGATIVE, val & 0x80);
+        }
+        break;
+        //Stores Y and (high byte of memory address + 1) at given memory address
+        case SHY: {
+            uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
+            uint8_t hi = (param & 0xFF00) >> 8;
+            uint8_t val = c->y & (hi + 1);
+            mem_write(c->b, param, val);
+
+            set_cpu_flag(c, ZERO, val == 0);
+            set_cpu_flag(c, NEGATIVE, val & 0x80);
+        }
+        break;
         default:
             printf("Opcode not supported\n");
             break;
     }
-    // printf("AFTER EXEC PC=%04X\n", c->pc);
     return cycles;
 }
 

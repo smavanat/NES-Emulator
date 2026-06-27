@@ -187,7 +187,7 @@ int main(void) {
     c.proc_stat_reg = 0x34;
 
     uint8_t *buf;
-    int sz = read_to_end("../pacman.nes", &buf, 0);
+    int sz = read_to_end("../nestest.nes", &buf, 0);
     if(sz < 0) {
         fprintf(stderr, "Error when opening a file\n");
         return 0;
