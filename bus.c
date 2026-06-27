@@ -86,8 +86,15 @@ void mem_write(bus *b, uint16_t addr, uint8_t val) {
             case 0x2007:
                 ppu_write_data(b->p, val);
             break;
-            case 0x4014:
-                b->p->oamdma_reg = val;
+            case 0x4014: {
+                uint16_t page_start = (uint16_t)val << 8;
+                for(int i = 0; i < 256; i++) {
+                    b->p->oam_data[b->p->oamaddr_reg] = mem_read(b, page_start + i);
+                    b->p->oamaddr_reg++;
+                }
+                b->dma_stall = (b->total_cycles % 2 == 0) ? 514 : 513;
+            }
+                // b->p->oamdma_reg = val;
             break;
             default:
                 fprintf(stderr, "Attempting to write to read-only PPU register at address %04X\n", addr);

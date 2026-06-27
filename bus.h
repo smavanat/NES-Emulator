@@ -29,6 +29,8 @@ typedef struct {
     ppu *p;
     joypad *player_1;
     joypad *player_2;
+    uint64_t total_cycles;
+    uint16_t dma_stall;
 } bus;
 
 uint8_t mem_read(bus *b, uint16_t addr);

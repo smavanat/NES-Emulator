@@ -197,7 +197,7 @@ uint8_t get_tile_pixel(const uint8_t *chr_rom, size_t bank, size_t tile, int x, 
 
     int bit = 7 - x;
 
-    return (((upper >> bit) & 1) << 1) | ((lower >> bit) & 1);
+    return (((lower >> bit) & 1) << 1) | ((upper >> bit) & 1);
 }
 
 void set_frame_pixel(frame *fr, int x, int y, uint8_t rgb[3]) {

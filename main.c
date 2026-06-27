@@ -187,7 +187,7 @@ int main(void) {
     c.proc_stat_reg = 0x34;
 
     uint8_t *buf;
-    int sz = read_to_end("../nestest.nes", &buf, 0);
+    int sz = read_to_end("../pacman.nes", &buf, 0);
     if(sz < 0) {
         fprintf(stderr, "Error when opening a file\n");
         return 0;
@@ -232,6 +232,16 @@ int main(void) {
 
                 size_t count = 0;
                 while(count < CPU_CYCLES_PER_FRAME) {
+                    if(c.b->dma_stall > 0) {
+                        c.b->dma_stall--;
+                        ppu_tick(c.b->p, &tile_frame[curr_frame]);
+                        ppu_tick(c.b->p, &tile_frame[curr_frame]);
+                        ppu_tick(c.b->p, &tile_frame[curr_frame]);
+                        c.b->total_cycles++;
+                        count++;
+                        continue;
+                    }
+
                     size_t cycles;
                     if(c.b->p->nmi_triggered) {
                         cycles = 7;
@@ -246,6 +256,7 @@ int main(void) {
                         ppu_tick(c.b->p, &tile_frame[curr_frame]);
                         ppu_tick(c.b->p, &tile_frame[curr_frame]);
                         count++;
+                        c.b->total_cycles++;
                     }
                 }
 
