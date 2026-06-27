@@ -317,13 +317,17 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
         }
 
         //Drawing sprites
-        //TODO: Draw 16x8 sprites as well (currently only do 8x8)
+
+        //Get sprite height
+        uint8_t sprite_height = get_ppu_ctrl_reg_flag(p, PPU_CR_SPRITE_SIZE) ? 16 : 8;
+
         for(int i = 0; i < p->secondary_oam_count; i++) {
             //Check if this sprite falls on the current pixel
             int diff_x = (int)p->cycles - (int)p->secondary_oam[i].x;
             int diff_y = (int)p->scanline - (int)p->secondary_oam[i].y;
 
             if(diff_x < 0 || diff_x > 7) continue;
+            if(diff_y < 0 || diff_y >= sprite_height) continue;
 
             //Extract attribute fields:
             uint8_t flip_h = (p->secondary_oam[i].attributes >> 6) & 1;
@@ -335,11 +339,32 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
             int px = flip_h ? (7 - diff_x) : diff_x;
             int py = flip_v ? (7 - diff_y) : diff_y;
 
-            //Get sprite pattern table
-            uint8_t pat_table = get_ppu_ctrl_reg_flag(p, PPU_CR_SPRITE_PATTERN_ADDR);
+            //Get sprite pattern table and tile index depending on whether its a normal or large sprite
+            uint8_t pat_table;
+            uint8_t tile_idx;
+            if(sprite_height == 16) {
+                pat_table = p->secondary_oam[i].tile & 0x1; //Get the bank from bit 0;
+                tile_idx = p->secondary_oam[i].tile & 0xFE; //Tile index is stored in rest of bits
+            }
+            else {
+                pat_table = get_ppu_ctrl_reg_flag(p, PPU_CR_SPRITE_PATTERN_ADDR);
+                tile_idx = p->secondary_oam[i].tile;
+            }
+
+            //For 8x16 sprites, need to select which tile we are using based on py
+            if(sprite_height == 16) {
+                if(flip_v) { //When flipped, bottom half uses base tile, top half uses tile+1
+                    if(py >= 8) py -= 8; //Set py back so we use the correct pixel in top tile on bottom half
+                    else tile_idx += 1; //Otherwise increment the tile index so we use the bottom tile to draw the top half
+                }
+                else if(py >= 8) { //If the pixel is in the bottom half, need to move to the next tile and adjust py to match
+                    tile_idx += 1;
+                    py -= 8;
+                }
+            }
 
             //Get the pixel colour index
-            uint8_t sprite_colour = get_tile_pixel(p->chr_rom, pat_table, p->secondary_oam[i].tile, px, py);
+            uint8_t sprite_colour = get_tile_pixel(p->chr_rom, pat_table, tile_idx, px, py);
 
             //0 means transparent for sprites
             if(sprite_colour == 0) continue;
