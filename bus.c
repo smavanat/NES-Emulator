@@ -1,4 +1,5 @@
 #include "bus.h"
+#include "joypad.h"
 #include "ppu.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -32,6 +33,12 @@ uint8_t mem_read(bus *b, uint16_t addr) {
     else if(addr <= PPU_REGISTERS_MIRRORS_END) {
         uint16_t mirror_down_addr = 0x2000 + (addr % 8);
         return mem_read(b, mirror_down_addr);
+    }
+    else if(addr == 0x4016) {
+        return joypad_read(b->player_1);
+    }
+    else if(addr == 0x4017) {
+        return joypad_read(b->player_2);
     }
     else if(addr >= 0x8000 && addr <= 0xFFFF) {
         addr -= 0x8000;
@@ -89,6 +96,12 @@ void mem_write(bus *b, uint16_t addr, uint8_t val) {
     else if(addr <= PPU_REGISTERS_MIRRORS_END) {
         uint16_t mirror_down_addr = 0x2000 + (addr % 8);
         mem_write(b, mirror_down_addr, val);
+    }
+    else if(addr == 0x4016) {
+        joypad_write(b->player_1, val);
+    }
+    else if(addr == 0x4017) {
+        joypad_write(b->player_2, val);
     }
     else if(addr >= 0x8000 && addr <= 0xFFFF) {
         fprintf(stderr, "ERROR: Attempting to write to cartridge ROM\n");

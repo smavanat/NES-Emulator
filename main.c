@@ -6,10 +6,13 @@
 #include "cpu.h"
 #include "externals/glad.h"
 #include "externals/GLFW/glfw3.h"
+#include "joypad.h"
 #include "ppu.h"
 
+//TODO: Comments
 uint8_t stop = 0;
 GLFWwindow *window;
+cpu c = {0};
 Renderer r = {0};
 
 int read_to_end(char const *path, uint8_t **buf, uint8_t add_null) {
@@ -93,6 +96,59 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
                     sizeof(quadVertices), quadVertices);
 }
 
+void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
+    switch(key) {
+        case GLFW_KEY_W:
+            joypad_set_button_pressed(c.b->player_1, JOYPAD_BUTTON_UP, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_A:
+            joypad_set_button_pressed(c.b->player_1, JOYPAD_BUTTON_LEFT, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_S:
+            joypad_set_button_pressed(c.b->player_1, JOYPAD_BUTTON_DOWN, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_D:
+            joypad_set_button_pressed(c.b->player_1, JOYPAD_BUTTON_RIGHT, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_Q:
+            joypad_set_button_pressed(c.b->player_1, JOYPAD_BUTTON_A, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_E:
+            joypad_set_button_pressed(c.b->player_1, JOYPAD_BUTTON_B, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_Z:
+            joypad_set_button_pressed(c.b->player_1, JOYPAD_BUTTON_SELECT, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_C:
+            joypad_set_button_pressed(c.b->player_1, JOYPAD_BUTTON_START, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_I:
+            joypad_set_button_pressed(c.b->player_2, JOYPAD_BUTTON_UP, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_J:
+            joypad_set_button_pressed(c.b->player_2, JOYPAD_BUTTON_LEFT, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_K:
+            joypad_set_button_pressed(c.b->player_2, JOYPAD_BUTTON_DOWN, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_L:
+            joypad_set_button_pressed(c.b->player_2, JOYPAD_BUTTON_RIGHT, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_U:
+            joypad_set_button_pressed(c.b->player_2, JOYPAD_BUTTON_A, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_O:
+            joypad_set_button_pressed(c.b->player_2, JOYPAD_BUTTON_B, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_M:
+            joypad_set_button_pressed(c.b->player_2, JOYPAD_BUTTON_SELECT, !(action == GLFW_RELEASE));
+        break;
+        case GLFW_KEY_PERIOD:
+            joypad_set_button_pressed(c.b->player_2, JOYPAD_BUTTON_START, !(action == GLFW_RELEASE));
+        break;
+    }
+}
+
 int init(GLFWwindow **window) {
     //Initialising GLFW:
     glfwInit();
@@ -114,6 +170,7 @@ int init(GLFWwindow **window) {
 
     glfwMakeContextCurrent(*window);
     glfwSetFramebufferSizeCallback(*window, framebuffer_size_callback);
+    glfwSetKeyCallback(*window, key_callback);
 
     //Loading GLAD
     if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -126,12 +183,11 @@ int init(GLFWwindow **window) {
 }
 
 int main(void) {
-    cpu c = {0};
     c.sp = 0xFF;
     c.proc_stat_reg = 0x34;
 
     uint8_t *buf;
-    int sz = read_to_end("../nestest.nes", &buf, 0);
+    int sz = read_to_end("../pacman.nes", &buf, 0);
     if(sz < 0) {
         fprintf(stderr, "Error when opening a file\n");
         return 0;
@@ -146,6 +202,8 @@ int main(void) {
         c.b->p->addr_reg->h_ptr = 1;
         c.b->p->scroll_reg = calloc(1, sizeof(scroll_register));
         c.b->p->scroll_reg->s_ptr = 1;
+        c.b->player_1 = calloc(1, sizeof(joypad));
+        c.b->player_2 = calloc(1, sizeof(joypad));
         r = render_init();
 
         if(!rom_load(c.b->rom, buf, sz)) {

@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "ppu.h"
+#include "joypad.h"
 
 #define RAM 0x0000
 #define RAM_MIRRORS_END 0x1FFF
@@ -26,6 +27,8 @@ typedef struct {
     uint8_t cpu_vram[2048];
     rom *rom;
     ppu *p;
+    joypad *player_1;
+    joypad *player_2;
 } bus;
 
 uint8_t mem_read(bus *b, uint16_t addr);
