@@ -14,7 +14,6 @@ typedef struct {
     uint8_t sp;
     uint8_t stop;
     uint16_t pc;
-    // uint8_t memory[MEMORY_SIZE];
     bus *b;
 } cpu;
 
@@ -149,15 +148,26 @@ typedef struct {
     uint8_t num_cycles;
 } instruction;
 
+//Uses the address given as a pointer
+//to set the pc to a two byte address
+//starting at the pointer
 void set_pc(cpu *c, uint16_t addr);
+//Returns the bit stored at the given flag
 uint8_t get_cpu_flag(cpu *c, cpu_flag fl);
 //Sets a cpu flag to a 1 if the given condition is true, other wise 0
 void set_cpu_flag(cpu *c, cpu_flag fl, uint8_t cond);
+
+//Debug function to print the given page of a CPU
 void print_page(cpu *c, uint8_t page_num);
+//Debug function to print the stack
 void print_stack(cpu *c);
+//Debug function to print the status of the registers in the CPU
 void print_cpu_state(cpu *c);
+//Main execution function of the CPU
 size_t execute_instr(cpu *c);
+//Starts a NMI interrupt
 void interrupt_nmi(cpu *c);
+//Starts an IRQ interrupt
 void interrupt_irq(cpu *c);
 
 //Array holding all of the instructions for the 6502

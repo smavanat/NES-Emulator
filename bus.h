@@ -26,7 +26,9 @@ typedef struct {
     uint16_t dma_stall; //Whether the cpu needs to be stalled to transport data via DMA
 } bus;
 
+//Function for reading from memory to cpu through the bus
 uint8_t mem_read(bus *b, uint16_t addr);
+//Function for writing to memory from cpu through the bus
 void mem_write(bus *b, uint16_t addr, uint8_t val);
 
 #endif //__BUS_H__

@@ -6,6 +6,7 @@
 #include <string.h>
 #include "externals/glad.h"
 
+//Stores the entire system palette for use by the ppu
 uint8_t system_palette[64][3] = {
     {0x80, 0x80, 0x80}, {0x00, 0x3D, 0xA6}, {0x00, 0x12, 0xB0}, {0x44, 0x00, 0x96}, {0xA1, 0x00, 0x5E},
     {0xC7, 0x00, 0x28}, {0xBA, 0x06, 0x00}, {0x8C, 0x17, 0x00}, {0x5C, 0x2F, 0x00}, {0x10, 0x45, 0x00},
@@ -22,13 +23,16 @@ uint8_t system_palette[64][3] = {
     {0x99, 0xFF, 0xFC}, {0xDD, 0xDD, 0xDD}, {0x11, 0x11, 0x11}, {0x11, 0x11, 0x11}
 };
 
+//Sets the address register to an explicit 16 bit address
 void set_addr_register(addr_register *reg, uint16_t val) {
     reg->h_byte = (uint8_t)(val >> 8);
     reg->l_byte = (uint8_t)val;
 }
+//Gets the address stored in the address register
 uint16_t get_addr_register(addr_register *reg) {
     return ((uint16_t)reg->h_byte) << 8 | (uint16_t)reg->l_byte;
 }
+//Updates the byte in the address register pointed to by h_ptr
 void update_addr_register(addr_register *reg, uint8_t val) {
     if(reg->h_ptr) reg->h_byte = val; else reg->l_byte = val;
 
@@ -36,6 +40,7 @@ void update_addr_register(addr_register *reg, uint8_t val) {
     if(get_addr_register(reg) > 0x3FFF) set_addr_register(reg, get_addr_register(reg) & 0x3FFF);
     reg->h_ptr = !reg->h_ptr;
 }
+//Increments the value in the address register by 1
 void increment_addr_register(addr_register *reg, uint8_t val) {
     uint8_t lo = reg->l_byte;
 
@@ -46,59 +51,78 @@ void increment_addr_register(addr_register *reg, uint8_t val) {
     if(get_addr_register(reg) > 0x3FFF) set_addr_register(reg, get_addr_register(reg) & 0x3FFF);
 }
 
+//Sets the scroll register to an explicit 16 bit value
 void set_scroll_register(scroll_register *reg, uint16_t val) {
     reg->xscroll = (uint8_t)(val >> 8);
     reg->yscroll = (uint8_t)val;
 }
+//Gets the value stored in the scroll register
 uint16_t get_scroll_register(scroll_register *reg) {
     return ((uint16_t)reg->xscroll) << 8 | (uint16_t)reg->yscroll;
 }
+//Updates the byte in the address register pointed to by s_ptr
 void update_scroll_register(scroll_register *reg, uint8_t val) {
     if(reg->s_ptr) reg->xscroll = val; else reg->yscroll = val;
 
     reg->s_ptr = !reg->s_ptr;
 }
 
+//Sets a specific control register flag based on a condition.
+//1 if condition is true, 0 otherwise
 void set_ppu_ctrl_reg_flag(ppu* p, ppu_cr_flag flag, uint8_t cond) {
     if(cond) p->ctrl_reg |= (uint8_t)(1 << flag);
     else p->ctrl_reg &= (uint8_t)~(1 << flag);
 }
-
+//Gets the bit value stored in a specific control register flag
 uint8_t get_ppu_ctrl_reg_flag(ppu* p, ppu_cr_flag flag) {
     if(p->ctrl_reg & (1 << flag)) return 1;
     else return 0;
 }
-
+//Writes to control register. Checks if VBlank flag is set to true
+//(while being not set before), and if GENERATE_NMI is also set,
+//triggers an NMI
 void write_to_ctrl_reg(ppu *p, uint8_t val) {
     uint8_t vblank_status = get_ppu_ctrl_reg_flag(p, PPU_CR_GENERATE_NMI);
     p->ctrl_reg = val;
+
+    //If we just set VBlank status and also NMI is true, trigger an NMI
     if(!vblank_status && get_ppu_ctrl_reg_flag(p, PPU_CR_GENERATE_NMI) && get_ppu_stat_reg_flag(p, PPU_STAT_VBLANK)) {
         p->nmi_triggered = 1;
     }
 }
-
+//What value the VRAM address should be incremented by.
+//1 means that we are going across, 32 means down
 uint8_t vram_addr_increment(ppu *p) {
     if(get_ppu_ctrl_reg_flag(p, PPU_CR_VRAM_ADD_INCREMENT)) return 32; else return 1;
 }
 
+//Sets a specific status register flag based on a condition.
+//1 if condition is true, 0 otherwise
 void set_ppu_stat_reg_flag(ppu* p, ppu_stat_flag flag, uint8_t cond) {
     if(cond) p->status_reg |= (uint8_t)(1 << flag);
     else p->status_reg &= (uint8_t)~(1 << flag);
 }
-
+//Gets the bit value stored in a specific status register flag
 uint8_t get_ppu_stat_reg_flag(ppu* p, ppu_stat_flag flag) {
     if(p->status_reg & (1 << flag)) return 1;
     else return 0;
 }
 
+//Increments the address register depending on the value of the PPU_CR_VRAM_ADD_INCREMENT
+//flag in the control register
 void ppu_increment_vram_addr(ppu *p) {
     increment_addr_register(p->addr_reg, vram_addr_increment(p));
 }
 
+//Converts a PPU nametable address into an index into VRAM
+//Since all values in 0x3000 - 0x3eFF are mirrors of 0x2000 - 0x2EFF
+//mirrors them down
+//Supports Vertical/Horizontal, Fourscreen, and Onescreen mirroring
 uint16_t ppu_mirror_vram_addr(ppu *p, uint16_t addr) {
-    uint16_t mirrored_vram = addr & 0x2fff; //Mirror down 0x3000-0x3eff to 0x2000-0x2eff
+    uint16_t mirrored_vram = addr & 0x2FFF; //Mirror down 0x3000-0x3eff to 0x2000-0x2eff
     uint16_t vram_index = mirrored_vram - 0x2000; //To vram vector
-    uint16_t name_table_index = vram_index / 0x400; //To name table index
+    uint16_t name_table_index = vram_index >> 10; //To nametable index
+    //Fourscreen mirroring maps nametables 2 and 3 to 0 and 1 respectively
     if(p->rom->mirroring == MIR_VERTICAL && (name_table_index == 2 || name_table_index == 3)) vram_index -= 0x800;
     else if(p->rom->mirroring == MIR_HORIZONTAL && (name_table_index == 2 || name_table_index == 1)) vram_index -= 0x400;
     else if(p->rom->mirroring == MIR_HORIZONTAL && name_table_index == 3) vram_index -= 0x800;
@@ -107,14 +131,15 @@ uint16_t ppu_mirror_vram_addr(ppu *p, uint16_t addr) {
 
     return vram_index;
 }
-
+//Internal ppu function to read data from ppu memory using an
+//arbitrary address
 uint8_t ppu_bus_read(ppu *p, uint16_t addr) {
     addr &= 0x3FFF; //Make sure it is in the 16kb range
 
-    if(addr <= 0x1FFF) return p->rom->ppu_read(p->rom, addr);
-    if(addr <= 0x2FFF) return p->vram[ppu_mirror_vram_addr(p, addr)];
-    if(addr <= 0x3EFF) return ppu_bus_read(p, addr - 0x1000);
-    if(addr <= 0x3FFF) {
+    if(addr <= 0x1FFF) return p->rom->ppu_read(p->rom, addr); //CHR ROM/RAM read using mapper defined function
+    if(addr <= 0x2FFF) return p->vram[ppu_mirror_vram_addr(p, addr)]; //Nametables
+    if(addr <= 0x3EFF) return ppu_bus_read(p, addr - 0x1000); //Mirror down to 0x2000 - 0x2EFFF range
+    if(addr <= 0x3FFF) { //Palette RAM indecies
         //Palette region is mirrored every 32 bytes
         addr &= 0x1F;
 
@@ -128,7 +153,7 @@ uint8_t ppu_bus_read(ppu *p, uint16_t addr) {
 
     return 0;
 }
-
+//Reads data from ppu memory using the address stored in the address register
 uint8_t ppu_read_data(ppu *p) {
     uint16_t addr = get_addr_register(p->addr_reg);
     uint8_t res;
@@ -140,7 +165,7 @@ uint8_t ppu_read_data(ppu *p) {
         //Internal buffer is still updated from mirrored nametable
         p->internal_data_buf = ppu_bus_read(p, addr - 0x1000);
     }
-    else {
+    else { //All other values are buffered
         res = p->internal_data_buf;
         p->internal_data_buf = ppu_bus_read(p, addr);
     }
@@ -149,11 +174,11 @@ uint8_t ppu_read_data(ppu *p) {
 
     return res;
 }
-
+//Internal ppu function to write data to an arbitrary address in ppu memory
 void ppu_bus_write(ppu *p, uint16_t addr, uint8_t val) {
     addr &= 0x3FFF; //Make sure the address is in the 16kb range
 
-    //CHR ROM, ignore writes. If we do CHR RAM can do writes here later
+    //Write to CHR ROM/RAM based on mapper defined function in ROM struct
     if(addr <= 0x1FFF) {
         p->rom->ppu_write(p->rom, addr, val);
     }
@@ -180,21 +205,19 @@ void ppu_bus_write(ppu *p, uint16_t addr, uint8_t val) {
         p->palette_table[addr] = val;
     }
 }
-
+//Writes data to ppu memory using the address stored in the address register
 void ppu_write_data(ppu *p, uint8_t val) {
     uint16_t addr = get_addr_register(p->addr_reg);
     ppu_bus_write(p, addr, val);
     ppu_increment_vram_addr(p);
 }
 
+//Gets the palette index of a specific tile pixel using the pattern table index (bank),
+//specific tile index in that pattern table, and x and y coordinates of the
+//pixel in the tile
 uint8_t get_tile_pixel(ppu *p, size_t bank, size_t tile, int x, int y) {
     bank *= 0x1000;
 
-    // const uint8_t *tile_data = &chr_rom[bank + tile * 16];
-    // const uint8_t *tile_data = ppu_bus_read(p, bank + tile * 16);
-
-    // uint8_t upper = tile_data[y];
-    // uint8_t lower = tile_data[y + 8];
     uint8_t upper = ppu_bus_read(p, y + bank + tile * 16);
     uint8_t lower = ppu_bus_read(p, 8 + y + bank + tile * 16);
 
@@ -202,7 +225,7 @@ uint8_t get_tile_pixel(ppu *p, size_t bank, size_t tile, int x, int y) {
 
     return (((lower >> bit) & 1) << 1) | ((upper >> bit) & 1);
 }
-
+//Sets the r/g/b value of a specific pixel in the frame
 void set_frame_pixel(frame *fr, int x, int y, uint8_t rgb[3]) {
     int base = (y * 3 * FRAME_WIDTH) + (x * 3);
 
@@ -213,6 +236,7 @@ void set_frame_pixel(frame *fr, int x, int y, uint8_t rgb[3]) {
     }
 }
 
+//Gets the palette of a background tile
 void bg_palette(ppu *p, uint16_t nametable_base, size_t tile_x, size_t tile_y, uint8_t *colour) {
     size_t attr_table_idx = tile_y / 4 * 8 + tile_x / 4;
     uint8_t attr_byte = ppu_bus_read(p, nametable_base + 0x3C0 + attr_table_idx);
@@ -229,13 +253,14 @@ void bg_palette(ppu *p, uint16_t nametable_base, size_t tile_x, size_t tile_y, u
     colour[2] = p->palette_table[palette_start+2];
 }
 
+//Gets the palette of a sprite tile
 void sprite_palette(ppu *p, uint8_t palette_idx, uint8_t *colour) {
     uint8_t palette_start = 0x11 + palette_idx * 4;
     colour[0] = p->palette_table[palette_start];
     colour[1] = p->palette_table[palette_start+1];
     colour[2] = p->palette_table[palette_start+2];
 }
-
+//Gets the data of every sprite that is rendererd on the current scanline
 void evaluate_sprites(ppu *p) {
     p->secondary_oam_count = 0;
     uint8_t sprite_height = get_ppu_ctrl_reg_flag(p, PPU_CR_SPRITE_SIZE) ? 16 : 8;
@@ -454,6 +479,7 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
     return 0;
 }
 
+//Calculates the projection matrix
 void ortho(float left, float right, float bottom, float top, float nearZ, float farZ, mat4 dest) {
     for(int i = 0; i < 4; i++) {
         for(int j = 0; j < 4; j++) {
@@ -474,6 +500,7 @@ void ortho(float left, float right, float bottom, float top, float nearZ, float 
     dest[3][3] = 1.0;
 }
 
+//Compiles a shader from a source file given the desired shader type
 unsigned int create_shader(const char **src, int shader_type) {
     unsigned int shader;
     shader = glCreateShader(shader_type);
@@ -497,7 +524,8 @@ unsigned int create_shader(const char **src, int shader_type) {
     return shader;
 }
 
-
+//Shaders for this program are simple enough that we can just encode them as strings
+//to avoid annoying file loading/reading every startup
 const char *vertex_shader = "#version 330 core\n"
                             "layout (location = 0) in vec2 aPos;\n"
                             "layout (location = 1) in vec2 aTexCoord;\n"
@@ -514,12 +542,8 @@ const char *fragment_shader = "#version 330 core\n"
                               "void main() {\n"
                               "    FragColor = texture(screenTexture, TexCoord);\n"
                               "}\n";
-/**
- * Initialises the pixel renderer
- * @param r the pixel renderer to initialise
- * @param vert_path the filepath to load the vertex shader from
- * @param frag_path the filepath to load the fragment shader from
- */
+
+//Initialises the pixel renderer
 Renderer render_init(void) {
     Renderer r = {0};
     r.screen_height = INITIAL_SCREEN_HEIGHT;
@@ -590,10 +614,7 @@ Renderer render_init(void) {
     return r;
 }
 
-/**
- * Frees a pixel renderer
- * @param r the pixel renderer to free
- */
+//Frees a pixel renderer
 void render_free(Renderer *r) {
     glDeleteBuffers(1, &r->vbo);
     glDeleteBuffers(1, &r->pbo);
@@ -603,10 +624,7 @@ void render_free(Renderer *r) {
     glDeleteTextures(1, &r->pixel_tex);
 }
 
-/**
- * Sets up the variables for renderering to the pbo from the pixel_renderer
- * @param r the pixel render to begin the pixel frame for
- */
+//Sets up the variables for renderering to the pbo from the Renderer
 void render_begin(Renderer *r) {
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, r->pbo); //Binding the pbo
     glBufferData(GL_PIXEL_UNPACK_BUFFER, FRAME_HEIGHT * FRAME_WIDTH * 3, NULL, GL_STREAM_DRAW); //Forcing the gpu to discard any data it is currently using
@@ -616,10 +634,7 @@ void render_begin(Renderer *r) {
     }
 }
 
-/**
- * Ends rendering to the current pixel frame
- * @param r the pixel_renderer whose frame should end
- */
+//Ends rendering to the current pixel frame
 void render_end(Renderer *r) {
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, r->pbo); //Get the pbo
     glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
@@ -640,33 +655,9 @@ void render_end(Renderer *r) {
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
-/**
- * Draws the entire grid directly on the screen by copying its entire contents into the renderer's pixel buffer
- * @param r the pixel renderer to render to
- * @oaram g the pixel grid whose pixels to use
- */
+//Draws the entire frame directly on the screen by copying its entire contents into the renderer's pixel buffer
 void draw_frame(Renderer *r, frame *fr) {
     for(int i = 0; i < FRAME_WIDTH * FRAME_HEIGHT*3; i++) {
         r->pixels[i] = fr->data[i];
     }
-    // memcpy(r->pixels, fr->data, FRAME_HEIGHT * FRAME_WIDTH * 3);
 }
-
-/**
- * Draws a pixel to the pixel buffer
- * @param r the pixel renderer to render to
- * @param position where the pixel should be rendererd in the texture
- * @param colour the colour of the pixel
- */
-void draw_pixel(Renderer *r, uint32_t position, uint8_t colour[3]) {
-    if(!r->pixels) {
-        printf("Pixel Buffer is NULL!!\n");
-        return;
-    }
-    if (position >= 0 && position < FRAME_HEIGHT * FRAME_WIDTH) { //Boundary check
-        for(int i = 0; i < 3; i++) {
-            r->pixels[(position*3)+i] = colour[i];
-        }
-    }
-}
-

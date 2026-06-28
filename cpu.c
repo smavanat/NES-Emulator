@@ -344,6 +344,7 @@ void set_pc(cpu *c, uint16_t addr) {
     c->pc = (((uint16_t)hi) << 8) | lo;
 }
 
+//Gets the two byte address stored at the next two bytes after pc
 uint16_t get_addr(cpu *c) {
     uint8_t low = fetch_byte(c);
     uint16_t high = fetch_byte(c);
@@ -351,13 +352,7 @@ uint16_t get_addr(cpu *c) {
     return (high << 8) | low;
 }
 
-uint16_t get_indirect_add(cpu *c, uint8_t start) {
-    uint8_t lo = mem_read(c->b, start);
-    uint8_t hi = mem_read(c->b, start+1);
-
-    return (((uint16_t)hi) << 8) | lo;
-}
-
+//Runs an interrupt IRQ
 void interrupt_irq(cpu *c) {
     if(get_cpu_flag(c, INTERRUPT_DISABLE)) return;
     push_pc(c);
@@ -365,18 +360,21 @@ void interrupt_irq(cpu *c) {
     set_cpu_flag(c, INTERRUPT_DISABLE, 1);
 
     set_pc(c, 0xFFFE);
-    c->b->p->rom->irq_pending = 0;
+    c->b->p->rom->irq_pending = 0; //Need to reset it to prevent repeat calls next frame
 }
 
+//Runs an interrupt NMI
 void interrupt_nmi(cpu *c) {
     push_pc(c);
     push(c, (c->proc_stat_reg & ~(1 << 4) | (1 << 5)));
     set_cpu_flag(c, INTERRUPT_DISABLE, 1);
 
     set_pc(c, 0xFFFA);
-    c->b->p->nmi_triggered = 0;
+    c->b->p->nmi_triggered = 0; //Need to reset it to prevent repeat calls next frame
 }
 
+//Sets the relevant flags that would occur from comparing two values
+//Helper for comparison functions such as CMP, CPY, CPX
 void compare(cpu *c, uint8_t v1, uint8_t v2) {
     set_cpu_flag(c, CARRY, v1 >= v2);
     set_cpu_flag(c, ZERO, v1 == v2);
@@ -406,7 +404,7 @@ uint16_t get_argument(cpu *c, address_mode mode, uint8_t get_val, size_t *cycles
             }
             addr += c->y;
             break;
-        case ACCUMULATOR:
+        case ACCUMULATOR: //Should not do anything and be explictly handled by the case in question
             break;
         case IMMEDIATE:
             return fetch_byte(c);
@@ -431,7 +429,7 @@ uint16_t get_argument(cpu *c, address_mode mode, uint8_t get_val, size_t *cycles
             }
             addr += c->y;
             break;
-        case RELATIVE:
+        case RELATIVE: //Don't bother as this should be handled by the branch function defined earlier
             break;
         case ZERO_PAGE:
             addr = fetch_byte(c);
