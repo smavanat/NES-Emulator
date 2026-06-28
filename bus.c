@@ -1,10 +1,13 @@
 #include "bus.h"
 #include "joypad.h"
 #include "ppu.h"
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+//TODO: Implement open bus behaviour: https://www.nesdev.org/wiki/Open_bus_behavior
 
 uint8_t mem_read(bus *b, uint16_t addr) {
     if(addr <= RAM_MIRRORS_END) {
@@ -453,8 +456,7 @@ int assign_rom_functions(rom *r) {
     return 1;
 }
 
-//TODO: Add support for NES2.0
-//      Add support for different mapper types
+//TODO: Add support for different mapper types
 //      Mapper 0 (NROM) -> DONE
 //      Mapper 1 (MMC1) -> DONE
 //      Mapper 2 (UxROM) -> DONE
@@ -482,40 +484,166 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
     else if(buf[6] & 0b1) r->mirroring = MIR_VERTICAL;
     else r->mirroring = MIR_HORIZONTAL;
 
-    r->mapper = (buf[7] & 0xF0) | (buf[6] >> 4);
-    if(!assign_rom_functions(r)) {
-        fprintf(stderr, "Mapper %hhu not supported\n", r->mapper);
-        return 1;
-    }
-
     uint8_t ines_ver = (buf[7] >> 2) & 0x3;
-    if(ines_ver != 0) {
-        fprintf(stderr, "NES2.0 format is not supported\n");
-        return 1;
-    }
+    // if(ines_ver != 0) {
+    //NES 2.0
+    if((buf[7] >> 2) & 0x3) {
+        //Check that the console type is the NES
+        if(buf[7] & 0x3) {
+            switch(buf[7] & 0x3) {
+                case 1: fprintf(stderr, "This emulator does not support the Nintendo Vs System\n"); break;
+                case 2: fprintf(stderr, "This emulator does not support the Nintendo Playchoice 10\n"); break;
+                case 3: fprintf(stderr, "This emulator does not support the Extended Console Type\n"); break;
+            }
+            return 1;
+        }
 
-    r->prg_rom_sz = buf[4] * PRG_PAGE_SIZE;
-    r->chr_rom_sz = buf[5] * CHR_PAGE_SIZE;
+        //Get the mapper/submapper
+        r->mapper = (((uint16_t)buf[8] & 0xF) << 8) | ((uint16_t)buf[7] & 0xF0) | (((uint16_t)buf[6] & 0xF0) >> 4);
+        r->submapper = (buf[8] & 0xF0) >> 4;
+        if(!assign_rom_functions(r)) {
+            fprintf(stderr, "Mapper %hu not supported\n", r->mapper);
+            return 1;
+        }
 
-    size_t trainer_size = (buf[6] & 0x04) ? 512 : 0;
-    size_t required = 16 + trainer_size + r->prg_rom_sz + r->chr_rom_sz;
+        //PRG ROM size LSB is in register 4;
+        //PRG ROM size MSB is bits 0-3 of register 9
+        //If PRG ROM MSB is 0xF, then the size is in exponential notation
+        //Otherwise just combine MSB and LSB to determine the number of pages (using PRG page size as 16KB)
+        //Detailed notes: https://www.nesdev.org/wiki/NES_2.0#PRG-ROM_Area
+        if((buf[9] & 0xF) == 0xF) {
+            //When in exponential notation, MSB doesn't matter
+            //First two bits of LSB determine the mantissa
+            //bits 2 - 7 of LSB determine exponent
+            //Full formula is 2^E * (2M + 1)
+            uint8_t exponent = (buf[4] >> 2);
+            uint8_t mantissa = buf[4] & 0x3;
+            r->prg_rom_sz = (uint64_t)pow(2, exponent) * ((mantissa * 2) + 1);
+        }
+        else {
+            r->prg_rom_sz = (((uint16_t)(buf[9] & 0xF) << 8) | buf[4]) * PRG_PAGE_SIZE;
+        }
+        //CHR ROM size LSB is in register 4;
+        //CHR ROM size MSB is bits 4-7 of register 9
+        //If CHR ROM MSB is 0xF, then the size is in exponential notation
+        //Otherwise just combine MSB and LSB to determine the number of pages (using CHR page size as 16KB)
+        //Detailed notes: https://www.nesdev.org/wiki/NES_2.0#CHR-ROM_Area
+        if((buf[9] & 0xF0) == 0xF0) {
+            //When in exponential notation, MSB doesn't matter
+            //First two bits of LSB determine the mantissa
+            //bits 2 - 7 of LSB determine exponent
+            //Full formula is 2^E * (2M + 1)
+            uint8_t exponent = (buf[5] >> 2);
+            uint8_t mantissa = buf[5] & 0x3;
+            r->chr_rom_sz = (uint64_t)pow(2, exponent) * ((mantissa * 2) + 1);
+        }
+        else {
+            r->chr_rom_sz = (((uint16_t)(buf[9] & 0xF0) << 4) | buf[5]) * CHR_PAGE_SIZE;
+        }
 
-    if ((size_t)buf_len < required) {
-        fprintf(stderr, "ROM file truncated\n");
-        return 1;
-    }
+        //Byte 10 bits 0-3 contains PRG RAM size
+        if(buf[10] & 0xF) {
+            r->prg_ram_sz = 64 << (buf[10] & 0xF);
+            r->prg_ram = calloc(r->prg_ram_sz, 1);
+        }
 
-    size_t prg_rom_start = 16 + ((buf[6] & 0b100) ? 512 : 0);
-    size_t chr_rom_start = prg_rom_start + r->prg_rom_sz;
+        //Check if the ROM contains 'Battery' or other non-volative memory
+        if(buf[6] & 0x2) {
+            r->battery_memory = 1;
+            //Byte 10 bits 4-6 contains PRG EEPROM/NVRAM size
+            if(buf[10] & 0xF0) {
+                r->prg_eeprom_sz = 64 << ((buf[10] & 0xF0) >> 4);
+                r->prg_eeprom = calloc(r->prg_eeprom_sz, 1);
+            }
+        }
 
-    r->prg_rom = malloc(sizeof(uint8_t) * r->prg_rom_sz);
-    memcpy(r->prg_rom, &buf[prg_rom_start], r->prg_rom_sz * sizeof(uint8_t));
+        //Byte 11 bits 0-3 contains CHR RAM size
+        if(buf[11] & 0xF) {
+            r->chr_ram_sz = 64 << (buf[11] & 0xF);
+            r->chr_ram = calloc(r->chr_ram_sz, 1);
+        }
+        //Not supporting CHR NVRAM since two mappers use it, neither of which I support
 
-    //Allocate CHR RAM if no CHR ROM
-    if(r->chr_rom_sz == 0) r->chr_rom = calloc(8192, 1);
-    else {
+        //TODO: Check byte 12 for CPU/PPU timing
+
+        size_t trainer_size = (buf[6] & 0x04) ? 512 : 0;
+        size_t required = 16 + trainer_size + r->prg_rom_sz + r->chr_rom_sz;
+
+        if ((size_t)buf_len < required) {
+            fprintf(stderr, "ROM file truncated\n");
+            return 1;
+        }
+
+        size_t prg_rom_start = 16 + trainer_size;
+        size_t chr_rom_start = prg_rom_start + r->prg_rom_sz;
+
+        r->prg_rom = malloc(sizeof(uint8_t) * r->prg_rom_sz);
+        memcpy(r->prg_rom, &buf[prg_rom_start], r->prg_rom_sz * sizeof(uint8_t));
+
         r->chr_rom = malloc(sizeof(uint8_t) * r->chr_rom_sz);
         memcpy(r->chr_rom, &buf[chr_rom_start], r->chr_rom_sz * sizeof(uint8_t));
+    }
+    //iNES
+    else {
+        //Check for malicious input
+        if(buf[12] || buf[13] || buf[14] || buf[15]) {
+            fprintf(stderr, "Last four bytes of ROM header not zero\n");
+            return 1;
+        }
+
+        //Check that the console type is the NES
+        if(buf[7] & 0x3) {
+            switch(buf[7] & 0x3) {
+                case 1: fprintf(stderr, "This emulator does not support the Nintendo Vs System\n"); break;
+                case 2: fprintf(stderr, "This emulator does not support the Nintendo Playchoice 10\n"); break;
+            }
+            return 1;
+        }
+
+        //Get the mapper
+        r->mapper = (buf[7] & 0xF0) | (buf[6] >> 4);
+        if(!assign_rom_functions(r)) {
+            fprintf(stderr, "Mapper %hu not supported\n", r->mapper);
+            return 1;
+        }
+
+        r->prg_rom_sz = buf[4] * PRG_PAGE_SIZE;
+        r->chr_rom_sz = buf[5] * CHR_PAGE_SIZE;
+        if(r->chr_rom_sz == 0) r->chr_ram_sz = 8192;
+
+        //Check if there is battery memory
+        if(buf[6] & 0x2) r->battery_memory = 1;
+
+        //Check if the ROM contains PRG RAM
+        if(buf[10] & 0x10) {
+            r->prg_ram_sz = (buf[8] == 0) ? 8192 : buf[8];
+            r->prg_ram = calloc(r->prg_ram_sz, 1);
+        }
+
+        size_t trainer_size = (buf[6] & 0x04) ? 512 : 0;
+        size_t required = 16 + trainer_size + r->prg_rom_sz + r->chr_rom_sz;
+
+        if ((size_t)buf_len < required) {
+            fprintf(stderr, "ROM file truncated\n");
+            return 1;
+        }
+
+        size_t prg_rom_start = 16 + trainer_size;
+        size_t chr_rom_start = prg_rom_start + r->prg_rom_sz;
+
+        if(r->prg_rom_sz > 0) {
+            r->prg_rom = malloc(sizeof(uint8_t) * r->prg_rom_sz);
+            memcpy(r->prg_rom, &buf[prg_rom_start], r->prg_rom_sz * sizeof(uint8_t));
+        }
+
+        //Allocate CHR RAM if no CHR ROM
+        if(r->chr_rom_sz == 0) r->chr_ram = calloc(8192, 1);
+        else {
+            r->chr_rom = malloc(sizeof(uint8_t) * r->chr_rom_sz);
+            memcpy(r->chr_rom, &buf[chr_rom_start], r->chr_rom_sz * sizeof(uint8_t));
+        }
+
+        //TODO: Check byte 10 for TV system type (PAL/NSTC) and whether there are bus conflicts
     }
 
     return 0;

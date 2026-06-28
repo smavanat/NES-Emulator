@@ -61,10 +61,17 @@ typedef struct {
 typedef struct rom rom;
 
 struct rom {
+    //Memory regions
     size_t prg_rom_sz;
+    size_t prg_ram_sz;
+    size_t prg_eeprom_sz;
     size_t chr_rom_sz;
+    size_t chr_ram_sz;
     uint8_t *prg_rom;
+    uint8_t *prg_ram;
+    uint8_t *prg_eeprom;
     uint8_t *chr_rom;
+    uint8_t *chr_ram;
 
     //Virtual function pointers for mapper specific behaviours
     uint8_t (*cpu_read)(rom *r, uint16_t addr);
@@ -72,13 +79,14 @@ struct rom {
     uint8_t (*ppu_read)(rom *r, uint16_t addr);
     void (*ppu_write)(rom *r, uint16_t addr, uint8_t val);
 
-    uint8_t mapper;
-    mirroring mirroring;
-
     //Mapper state
+    uint16_t mapper;
+    uint8_t submapper;
+    mirroring mirroring;
     uint8_t prg_bank;
     uint8_t chr_bank;
     uint8_t irq_pending;
+    uint8_t battery_memory;
     uint8_t mapper_registers[16];
 };
 
@@ -89,11 +97,12 @@ typedef struct {
     uint8_t oam_data[256];
     uint8_t palette_table[32];
     sprite_entry secondary_oam[8];
+
     rom *rom;
     addr_register *addr_reg;
     scroll_register *scroll_reg;
+
     size_t cycles;
-    size_t chr_rom_sz;
     uint16_t scanline;
     uint8_t secondary_oam_count;
     uint8_t ctrl_reg;

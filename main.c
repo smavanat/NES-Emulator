@@ -225,7 +225,7 @@ int main(void) {
     c.proc_stat_reg = 0x34;
 
     uint8_t *buf;
-    int sz = read_to_end("../pacman.nes", &buf, 0);
+    int sz = read_to_end("../zelda.nes", &buf, 0);
     if(sz < 0) {
         fprintf(stderr, "Error when opening a file\n");
         return 0;
@@ -255,7 +255,6 @@ int main(void) {
             printf("RESET VECTOR = %02X %02X\n", mem_read(c.b, 0xFFFC), mem_read(c.b, 0xFFFD));
             printf("Reset vector: %04X\n", c.pc);
             c.b->p->rom = c.b->rom;
-            c.b->p->chr_rom_sz = c.b->rom->chr_rom_sz;
             frame tile_frame[2] = {{0}, {0}};
             uint8_t curr_frame = 0;
 
