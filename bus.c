@@ -43,7 +43,7 @@ uint8_t mem_read(bus *b, uint16_t addr) {
     else if(addr == 0x4017) {
         return joypad_read(b->player_2);
     }
-    else if(addr >= 0x8000 && addr <= 0xFFFF) {
+    else if(addr >= 0x6000 && addr <= 0xFFFF) {
         return b->rom->cpu_read(b->rom, addr);
     }
     else {
@@ -110,7 +110,7 @@ void mem_write(bus *b, uint16_t addr, uint8_t val) {
     else if(addr == 0x4017) {
         joypad_write(b->player_2, val);
     }
-    else if(addr >= 0x8000 && addr <= 0xFFFF) {
+    else if(addr >= 0x6000 && addr <= 0xFFFF) {
         b->rom->cpu_write(b->rom, addr, val);
     }
     else {
@@ -120,6 +120,7 @@ void mem_write(bus *b, uint16_t addr, uint8_t val) {
 
 //Functions for Mapper 0 (NROM)
 uint8_t mapper_0_cpu_read(rom *r, uint16_t addr) {
+    if(addr < 0x8000) return 0;
     addr -= 0x8000;
     if(r->prg_rom_sz == 0x4000 && addr >= 0x4000) addr = addr % 0x4000;
     return r->prg_rom[addr];
@@ -128,35 +129,64 @@ void mapper_0_cpu_write(rom *r, uint16_t addr, uint8_t val) {
     fprintf(stderr, "ERROR: Attempting to write to cartridge ROM\n");
 }
 uint8_t mapper_0_ppu_read(rom *r, uint16_t addr) {
-    return r->chr_rom[addr];
+    return (r->chr_rom_sz == 0) ? r->chr_ram[addr % r->chr_ram_sz] : r->chr_rom[addr];
 }
 void mapper_0_ppu_write(rom *r, uint16_t addr, uint8_t val) {
     // If chr_rom_sz == 0, treat at RAM
-    if(r->chr_rom_sz == 0) r->chr_rom[addr % 8192] = val;
+    if(r->chr_rom_sz == 0) r->chr_ram[addr % r->chr_ram_sz] = val;
     else fprintf(stderr, "ERROR: Attempting to write to CHR ROM\n");
 }
 
 //Functions for Mapper 1 (MMC1)
+//Register mapping:
+//[0]: Control (0x8000 - 0x9FFF)
+//[1]: CHR Bank 0 (0xA000 - 0xBFFF)
+//[2]: CHR Bank 1 (0xC000 - 0xDFFF)
+//[3]: PRG Bank (0xE000 - 0xFFFF)
+//[4]: Load register (0x8000 - 0xFFFF)
+//[5]: Shift counter
 uint8_t mapper_1_cpu_read(rom *r, uint16_t addr) {
+    //PRG RAM at 0x6000 - 0x7FFF
+    if(addr < 0x8000) {
+        //Check if PRG RAM is disabled
+        if(r->mapper_registers[3] & 0x10) return 0xFF; //Open bus
+
+        //SOROM/SXROM: use bit 3 of CHR bank 0
+        uint8_t ram_bank = 0;
+        if(r->prg_rom_sz > 0x40000) { //> 256 KB means extended banking
+            ram_bank = (r->mapper_registers[1] >> 3) & 0x01;
+        }
+        // printf("PRG RAM read at %04X = %02X\n", addr, r->prg_ram[(ram_bank * 0x2000) + (addr - 0x6000)]);
+        return r->prg_ram[(ram_bank * 0x2000) + (addr - 0x6000)];
+    }
+
+    //For ROMs > 256kb (SUROM/SXROM), bit 4 of CHR Bank 0
+    //selects which 256KB PRG ROM block to use
+    uint8_t prg_block = 0;
+    if(r->prg_rom_sz > 0x40000) {
+        prg_block = (r->mapper_registers[1] >> 4) & 0x01;
+    }
+    uint32_t block_offset = prg_block * 0x40000;
+
     //Control(0) register bits 2 and 3 set PRG ROM bank mode
-    uint8_t prg_mode = (r->mapper_registers[0]) & 0xC;
+    uint8_t prg_mode = (r->mapper_registers[0] >> 2) & 0x3;
 
     uint32_t offset;
     if(prg_mode == 0 || prg_mode == 1) {
         //32 KB mode: switch two banks at once, ignore low bit of bank number
         uint8_t bank = r->prg_bank & 0xFE;
-        if(addr <= 0xBFFF) offset = bank * 0x4000 + (addr - 0x8000);
-        else offset = (bank + 1) * 0x4000 + (addr - 0xC000);
+        if(addr <= 0xBFFF) offset = block_offset + bank * 0x4000 + (addr - 0x8000);
+        else offset = block_offset + (bank + 1) * 0x4000 + (addr - 0xC000);
     }
     else if(prg_mode == 2) {
         //Fix first bank at 0x8000 and switch 16KB bank at 0xC000
-        if(addr <= 0xBFFF) offset = addr - 0x8000; //First bank (fixed)
-        else offset = r->prg_bank * 0x4000 + (addr - 0xC000);
+        if(addr <= 0xBFFF) offset = block_offset + addr - 0x8000; //First bank (fixed)
+        else offset = block_offset + r->prg_bank * 0x4000 + (addr - 0xC000);
     }
     else {
         //Fix last bank at 0xC000 and switch 16KB bank at 0x8000
-        if(addr <= 0xBFFF) offset = r->prg_bank * 0x4000 + (addr - 0x8000);
-        else offset = (r->prg_rom_sz - 0x4000) + (addr - 0xC000); //Last bank (fixed)
+        if(addr <= 0xBFFF) offset = block_offset + r->prg_bank * 0x4000 + (addr - 0x8000);
+        else offset = block_offset + (r->prg_rom_sz - 0x4000) + (addr - 0xC000); //Last bank (fixed)
     }
 
     //Clamp to avoid out of bounds
@@ -164,14 +194,25 @@ uint8_t mapper_1_cpu_read(rom *r, uint16_t addr) {
     return r->prg_rom[offset];
 }
 
-//NOTE: Apparently MMC1 ignores writes on consecutive cycles
-//      To prevent instructions such as INC from writing twice
-//      accidentally. Currently not implemented
 void mapper_1_cpu_write(rom *r, uint16_t addr, uint8_t val) {
+    //Writing to PRG RAM at 0x6000 - 0x7FFF
+    if(addr < 0x8000) {
+        if(!(r->mapper_registers[3] & 0x10)) { //If PRG RAM enabled
+            //sorom/sxrom: use bit 3 of chr bank 0
+            uint8_t ram_bank = 0;
+            if(r->prg_rom_sz > 0x40000) { //> 256 KB means extended banking
+                ram_bank = (r->mapper_registers[1] >> 3) & 0x01;
+            }
+            r->prg_ram[(ram_bank * 0x2000) + (addr - 0x6000)] = val;
+        }
+        return;
+    }
+
     //If bit 7 off the given value is 1, clear shift and count registers
     if(val & 0x80) {
         r->mapper_registers[4] = 0; //Clear the shift register
         r->mapper_registers[5] = 0; //Clear the count
+        r->mapper_registers[0] |= 0x0C; //Set PRG ROM bank mode to 3
         return;
     }
 
@@ -195,7 +236,9 @@ void mapper_1_cpu_write(rom *r, uint16_t addr, uint8_t val) {
         r->mapper_registers[register_index] = r->mapper_registers[4]; //Copying the value from the shift register into the desired register
 
         //PRG Bank(3) register bits 0 - 3 control PRG bank
-        if(register_index == 3) r->prg_bank = r->mapper_registers[3] & 0x0F;
+        if(register_index == 3) {
+            r->prg_bank = r->mapper_registers[3] & 0x0F;
+        }
         //Control(0) register bits control mirroring
         if(register_index == 0) {
             switch(r->mapper_registers[0] & 0x3) {
@@ -235,13 +278,26 @@ uint8_t mapper_1_ppu_read(rom *r, uint16_t addr) {
     }
 
     // If chr_rom_sz == 0, treat at RAM
-    if(r->chr_rom_sz == 0) return r->chr_rom[offset % 8192];
+    if(r->chr_rom_sz == 0) return r->chr_ram[offset % r->chr_ram_sz];
     else return r->chr_rom[offset % r->chr_rom_sz];
 }
 void mapper_1_ppu_write(rom *r, uint16_t addr, uint8_t val) {
-    // If chr_rom_sz == 0, treat at RAM
-    if(r->chr_rom_sz == 0) r->chr_rom[addr % 8192] = val;
-    else fprintf(stderr, "ERROR: Attempting to write to CHR ROM\n");
+    if(r->chr_rom_sz != 0) {
+        fprintf(stderr, "ERROR: Attempting to write to CHR ROM\n");
+        return;
+    }
+    uint8_t chr_mode = r->mapper_registers[0] & 0x10;
+    uint32_t offset;
+
+    if(chr_mode == 0) {
+        uint8_t bank = r->mapper_registers[1] & 0xFE;
+        offset = bank * 0x1000 + addr;
+    } else {
+        if(addr < 0x1000) offset = r->mapper_registers[1] * 0x1000 + addr;
+        else              offset = r->mapper_registers[2] * 0x1000 + (addr - 0x1000);
+    }
+
+    r->chr_ram[offset % r->chr_ram_sz] = val;
 }
 
 //Functions for Mapper 2 (UxROM)
@@ -264,7 +320,7 @@ uint8_t mapper_2_ppu_read(rom *r, uint16_t addr) {
 }
 void mapper_2_ppu_write(rom *r, uint16_t addr, uint8_t val) {
     // If chr_rom_sz == 0, treat at RAM
-    if(r->chr_rom_sz == 0) r->chr_rom[addr % 8192] = val;
+    if(r->chr_rom_sz == 0) r->chr_ram[addr % r->chr_ram_sz] = val;
     else fprintf(stderr, "ERROR: Attempting to write to CHR ROM\n");
 }
 
@@ -384,12 +440,12 @@ uint8_t mapper_4_ppu_read(rom *r, uint16_t addr) {
         if(addr < 0x2000) offset = r->mapper_registers[10] * 0x400 + (addr - 0x1800);
     }
 
-    if(r->chr_rom_sz == 0) return r->chr_rom[offset % 8192]; //CHR RAM
+    if(r->chr_rom_sz == 0) return r->chr_ram[offset % r->chr_ram_sz]; //CHR RAM
     else return r->chr_rom[offset % r->chr_rom_sz]; //CHR ROM
 }
 void mapper_4_ppu_write(rom *r, uint16_t addr, uint8_t val) {
     // If chr_rom_sz == 0, treat at RAM
-    if(r->chr_rom_sz == 0) r->chr_rom[addr % 8192] = val;
+    if(r->chr_rom_sz == 0) r->chr_ram[addr % r->chr_ram_sz] = val;
     else fprintf(stderr, "ERROR: Attempting to write to CHR ROM\n");
 }
 
@@ -409,7 +465,7 @@ void mapper_7_ppu_write(rom *r, uint16_t addr, uint8_t val) {
     r->chr_rom[addr % 8192] = val;
 }
 
-int assign_rom_functions(rom *r) {
+int assign_rom_functions(rom *r, uint8_t *buf, size_t prg_rom_start, size_t chr_rom_start) {
     switch (r->mapper) {
         case 0:
             r->cpu_read = mapper_0_cpu_read;
@@ -421,6 +477,11 @@ int assign_rom_functions(rom *r) {
             r->mapper_registers[0] = 0x0C;
             r->mapper_registers[4] = 0;
             r->mapper_registers[5] = 0;
+
+            //If not in NES 2.0 or not using iNES extensions, need to assume PRG_RAM size
+            if(!r->prg_ram_sz) r->prg_ram_sz = 0x8000;
+            if(r->submapper == 5) r->prg_rom_sz = 0x8000;
+
             r->cpu_read = mapper_1_cpu_read;
             r->cpu_write = mapper_1_cpu_write;
             r->ppu_read = mapper_1_ppu_read;
@@ -449,8 +510,24 @@ int assign_rom_functions(rom *r) {
             r->cpu_write = mapper_7_cpu_write;
             r->ppu_read = mapper_7_ppu_read;
             r->ppu_write = mapper_7_ppu_write;
+        break;
         default:
             return 0;
+    }
+
+    //Assign memory here. Better to do it here than in the load_rom function
+    //as we can take into account the changes to memory sizes due to mappers/submappers
+    //and also not prematurely allocate memory for an invalid mapper
+    if(r->prg_ram_sz) r->prg_ram = calloc(r->prg_ram_sz, 1);
+    if(r->chr_ram_sz) r->chr_ram = calloc(r->chr_ram_sz, 1);
+    if(r->prg_eeprom_sz) r->prg_eeprom = calloc(r->prg_eeprom_sz, 1);
+    if(r->prg_rom_sz) {
+        r->prg_rom = malloc(sizeof(uint8_t) * r->prg_rom_sz);
+        memcpy(r->prg_rom, &buf[prg_rom_start], r->prg_rom_sz * sizeof(uint8_t));
+    }
+    if(r->chr_rom_sz) {
+        r->chr_rom = malloc(sizeof(uint8_t) * r->chr_rom_sz);
+        memcpy(r->chr_rom, &buf[chr_rom_start], r->chr_rom_sz * sizeof(uint8_t));
     }
 
     return 1;
@@ -484,8 +561,6 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
     else if(buf[6] & 0b1) r->mirroring = MIR_VERTICAL;
     else r->mirroring = MIR_HORIZONTAL;
 
-    uint8_t ines_ver = (buf[7] >> 2) & 0x3;
-    // if(ines_ver != 0) {
     //NES 2.0
     if((buf[7] >> 2) & 0x3) {
         //Check that the console type is the NES
@@ -495,14 +570,6 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
                 case 2: fprintf(stderr, "This emulator does not support the Nintendo Playchoice 10\n"); break;
                 case 3: fprintf(stderr, "This emulator does not support the Extended Console Type\n"); break;
             }
-            return 1;
-        }
-
-        //Get the mapper/submapper
-        r->mapper = (((uint16_t)buf[8] & 0xF) << 8) | ((uint16_t)buf[7] & 0xF0) | (((uint16_t)buf[6] & 0xF0) >> 4);
-        r->submapper = (buf[8] & 0xF0) >> 4;
-        if(!assign_rom_functions(r)) {
-            fprintf(stderr, "Mapper %hu not supported\n", r->mapper);
             return 1;
         }
 
@@ -542,26 +609,17 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
         }
 
         //Byte 10 bits 0-3 contains PRG RAM size
-        if(buf[10] & 0xF) {
-            r->prg_ram_sz = 64 << (buf[10] & 0xF);
-            r->prg_ram = calloc(r->prg_ram_sz, 1);
-        }
+        if(buf[10] & 0xF) r->prg_ram_sz = 64 << (buf[10] & 0xF);
 
         //Check if the ROM contains 'Battery' or other non-volative memory
         if(buf[6] & 0x2) {
             r->battery_memory = 1;
             //Byte 10 bits 4-6 contains PRG EEPROM/NVRAM size
-            if(buf[10] & 0xF0) {
-                r->prg_eeprom_sz = 64 << ((buf[10] & 0xF0) >> 4);
-                r->prg_eeprom = calloc(r->prg_eeprom_sz, 1);
-            }
+            if(buf[10] & 0xF0) r->prg_eeprom_sz = 64 << ((buf[10] & 0xF0) >> 4);
         }
 
         //Byte 11 bits 0-3 contains CHR RAM size
-        if(buf[11] & 0xF) {
-            r->chr_ram_sz = 64 << (buf[11] & 0xF);
-            r->chr_ram = calloc(r->chr_ram_sz, 1);
-        }
+        if(buf[11] & 0xF) r->chr_ram_sz = 64 << (buf[11] & 0xF);
         //Not supporting CHR NVRAM since two mappers use it, neither of which I support
 
         //TODO: Check byte 12 for CPU/PPU timing
@@ -577,11 +635,14 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
         size_t prg_rom_start = 16 + trainer_size;
         size_t chr_rom_start = prg_rom_start + r->prg_rom_sz;
 
-        r->prg_rom = malloc(sizeof(uint8_t) * r->prg_rom_sz);
-        memcpy(r->prg_rom, &buf[prg_rom_start], r->prg_rom_sz * sizeof(uint8_t));
-
-        r->chr_rom = malloc(sizeof(uint8_t) * r->chr_rom_sz);
-        memcpy(r->chr_rom, &buf[chr_rom_start], r->chr_rom_sz * sizeof(uint8_t));
+        //Get the mapper/submapper
+        r->mapper = (((uint16_t)buf[8] & 0xF) << 8) | ((uint16_t)buf[7] & 0xF0) | (((uint16_t)buf[6] & 0xF0) >> 4);
+        printf("Mapper: %hu\n", r->mapper);
+        r->submapper = (buf[8] & 0xF0) >> 4;
+        if(!assign_rom_functions(r, buf, prg_rom_start, chr_rom_start)) {
+            fprintf(stderr, "Mapper %hu not supported\n", r->mapper);
+            return 1;
+        }
     }
     //iNES
     else {
@@ -600,13 +661,6 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
             return 1;
         }
 
-        //Get the mapper
-        r->mapper = (buf[7] & 0xF0) | (buf[6] >> 4);
-        if(!assign_rom_functions(r)) {
-            fprintf(stderr, "Mapper %hu not supported\n", r->mapper);
-            return 1;
-        }
-
         r->prg_rom_sz = buf[4] * PRG_PAGE_SIZE;
         r->chr_rom_sz = buf[5] * CHR_PAGE_SIZE;
         if(r->chr_rom_sz == 0) r->chr_ram_sz = 8192;
@@ -615,10 +669,7 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
         if(buf[6] & 0x2) r->battery_memory = 1;
 
         //Check if the ROM contains PRG RAM
-        if(buf[10] & 0x10) {
-            r->prg_ram_sz = (buf[8] == 0) ? 8192 : buf[8];
-            r->prg_ram = calloc(r->prg_ram_sz, 1);
-        }
+        if(buf[10] & 0x10) r->prg_ram_sz = (buf[8] == 0) ? 8192 : buf[8];
 
         size_t trainer_size = (buf[6] & 0x04) ? 512 : 0;
         size_t required = 16 + trainer_size + r->prg_rom_sz + r->chr_rom_sz;
@@ -631,16 +682,14 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
         size_t prg_rom_start = 16 + trainer_size;
         size_t chr_rom_start = prg_rom_start + r->prg_rom_sz;
 
-        if(r->prg_rom_sz > 0) {
-            r->prg_rom = malloc(sizeof(uint8_t) * r->prg_rom_sz);
-            memcpy(r->prg_rom, &buf[prg_rom_start], r->prg_rom_sz * sizeof(uint8_t));
-        }
-
         //Allocate CHR RAM if no CHR ROM
-        if(r->chr_rom_sz == 0) r->chr_ram = calloc(8192, 1);
-        else {
-            r->chr_rom = malloc(sizeof(uint8_t) * r->chr_rom_sz);
-            memcpy(r->chr_rom, &buf[chr_rom_start], r->chr_rom_sz * sizeof(uint8_t));
+        if(r->chr_rom_sz == 0) r->chr_ram_sz = 8192;
+
+        //Get the mapper
+        r->mapper = (buf[7] & 0xF0) | (buf[6] >> 4);
+        if(!assign_rom_functions(r, buf, prg_rom_start, chr_rom_start)) {
+            fprintf(stderr, "Mapper %hu not supported\n", r->mapper);
+            return 1;
         }
 
         //TODO: Check byte 10 for TV system type (PAL/NSTC) and whether there are bus conflicts

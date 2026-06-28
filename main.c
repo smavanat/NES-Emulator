@@ -250,9 +250,21 @@ int main(void) {
         if(!rom_load(c.b->rom, buf, sz)) {
             printf("Loaded\n");
             free(buf);
+            printf("PRG ROM size: %zu\n", c.b->rom->prg_rom_sz);
+            printf("CHR ROM size: %zu\n", c.b->rom->chr_rom_sz);
+            printf("CHR RAM size: %zu\n", c.b->rom->chr_ram_sz);
+            printf("Mapper: %u\n", c.b->rom->mapper);
+            printf("Initial control reg: %02X\n", c.b->rom->mapper_registers[0]);
+            printf("prg_rom[131068]=%02X prg_rom[131069]=%02X\n",
+                   c.b->rom->prg_rom[131068], c.b->rom->prg_rom[131069]);
+
+            // Manually read the reset vector bytes through the mapper
+            uint8_t lo = c.b->rom->cpu_read(c.b->rom, 0xFFFC);
+            uint8_t hi = c.b->rom->cpu_read(c.b->rom, 0xFFFD);
+            printf("Raw reset vector bytes: %02X %02X\n", lo, hi);
+            printf("Expected reset vector: %04X\n", (hi << 8) | lo);
 
             set_pc(&c, 0xFFFC); //Resetting the pc
-            printf("RESET VECTOR = %02X %02X\n", mem_read(c.b, 0xFFFC), mem_read(c.b, 0xFFFD));
             printf("Reset vector: %04X\n", c.pc);
             c.b->p->rom = c.b->rom;
             frame tile_frame[2] = {{0}, {0}};
@@ -323,12 +335,17 @@ int main(void) {
             print_page(&c, 0);
 
         }
-        free(c.b->rom->chr_rom);
-        free(c.b->rom->prg_rom);
+        if(c.b->rom->chr_rom) free(c.b->rom->chr_rom);
+        if(c.b->rom->prg_rom) free(c.b->rom->prg_rom);
+        if(c.b->rom->chr_ram) free(c.b->rom->chr_ram);
+        if(c.b->rom->prg_ram) free(c.b->rom->prg_ram);
+        if(c.b->rom->prg_eeprom) free(c.b->rom->prg_eeprom);
         free(c.b->rom);
         free(c.b->p->addr_reg);
         free(c.b->p->scroll_reg);
         free(c.b->p);
+        free(c.b->player_1);
+        free(c.b->player_2);
         free(c.b);
     }
     return 0;
