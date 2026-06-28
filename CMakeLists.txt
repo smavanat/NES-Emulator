@@ -34,6 +34,9 @@ endif()
 # Create the executable target
 add_executable(jes "${CMAKE_SOURCE_DIR}/main.c" "${CMAKE_SOURCE_DIR}/cpu.c" "${CMAKE_SOURCE_DIR}/ppu.c" "${CMAKE_SOURCE_DIR}/joypad.c" "${CMAKE_SOURCE_DIR}/bus.c" "${CMAKE_SOURCE_DIR}/glad.c")
 
+target_compile_options(jes PRIVATE -fsanitize=address)
+target_link_options(jes PRIVATE -fsanitize=address)
+
 # Add include directories (external libraries)
 target_include_directories(jes
     PRIVATE
@@ -44,9 +47,9 @@ if(APPLE)
     find_library(COCOA_LIBRARY Cocoa)
     find_library(IOKIT_LIBRARY IOKit)
     find_library(COREVIDEO_LIBRARY CoreVideo)
-    target_link_libraries(jes PRIVATE glfw ${COCOA_LIBRARY} ${IOKIT_LIBRARY} ${COREVIDEO_LIBRARY} "-framework OpenGL")
+    target_link_libraries(jes PRIVATE glfw m ${COCOA_LIBRARY} ${IOKIT_LIBRARY} ${COREVIDEO_LIBRARY} "-framework OpenGL")
 elseif(WIN32)
-    target_link_libraries(jes PRIVATE glfw opengl32 kernel32 user32 gdi32 shell32)
+    target_link_libraries(jes PRIVATE glfw opengl32 kernel32 user32 gdi32 shell32 m)
 else()
     target_link_libraries(jes PRIVATE glfw GL X11 pthread Xi dl m)
 endif()
