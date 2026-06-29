@@ -282,8 +282,8 @@ Clay_ElementDeclaration sidebarItemConfig = (Clay_ElementDeclaration){
 };
 
 //Reusable components are just normal functions
-void SidebarItemComponent() {
-    CLAY(CLAY_ID("Sidebar"), sidebarItemConfig) {
+void SidebarItemComponent(int index) {
+    CLAY(CLAY_IDI("Sidebar", index), sidebarItemConfig) {
         //Children go here
     }
 }
@@ -293,7 +293,7 @@ int main(void) {
     Clay_Arena arena = Clay_CreateArenaWithCapacityAndMemory(totalMemorySize, malloc(totalMemorySize));
 
     init(&window);
-    r = render_init(); //Initialising the renderer
+    r = render_init(NULL); //Initialising the renderer
     Clay_Initialize(arena, (Clay_Dimensions){r.screen_width, r.screen_height}, (Clay_ErrorHandler){HandleClayErrors});
 
     struct timeval stop, start; //Store the start and end times of a frame
@@ -305,21 +305,22 @@ int main(void) {
         //Clear the screen
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT);
+
         //Update Clay internal layout dimensions to support resizing
         Clay_SetLayoutDimensions((Clay_Dimensions){r.screen_width, r.screen_height});
         //TODO:Update internal pointer position for handling mouseover/click/touch events
         //Clay_SetPointerState((Clay_Vector2){mouseX, mouseY}, isMouseDown);
         //Clay_UpdateScrollContainers(true, (Clay_Vector2){mouseWheelX, mouseWheelY}, dt);
 
-        //All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
+        // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
         Clay_BeginLayout();
 
         //Clay example UI with a fixed width sidebar and flexible width main content
         CLAY(CLAY_ID("OuterContainer"), { .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 16},
              .backgroundColor = {250, 250, 255, 255}}) {
             CLAY(CLAY_ID("SideBar"), {
-                .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {.width = CLAY_SIZING_FIXED(300), .height = CLAY_SIZING_GROW(0)}},
-                .backgroundColor = COLOUR_LIGHT
+                .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {.width = CLAY_SIZING_FIXED(300), .height = CLAY_SIZING_GROW(0)},
+                .padding = CLAY_PADDING_ALL(16), .childGap = 16}, .backgroundColor = COLOUR_LIGHT
             }) {
                 CLAY(CLAY_ID("ProfilePictureOuter"), {.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 16,
                 .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}}, .backgroundColor = COLOUR_RED}) {
@@ -328,63 +329,91 @@ int main(void) {
 
                 // Standard C code like loops etc work inside components
                 for (int i = 0; i < 5; i++) {
-                    SidebarItemComponent();
+                    SidebarItemComponent(i);
                 }
-
-                CLAY(CLAY_ID("MainContent"), { .layout = { .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0) } }, .backgroundColor = COLOUR_LIGHT }) {}
              }
+            CLAY(CLAY_ID("MainContent"), { .layout = { .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0) } }, .backgroundColor = COLOUR_LIGHT }) {}
         }
 
         // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
         Clay_RenderCommandArray renderCommands = Clay_EndLayout(dt); // deltaTime is the time since the last frame, and is used for transitions
 
-        //TODO: Implement renderer that handles all of these rendering commands. Use stb for text renderering
-        for(int i = 0; i < renderCommands.length; i++) {
-            Clay_RenderCommand *renderCommand = &renderCommands.internalArray[i];
+        render_begin(&r);
+        //     render_draw_quad(&r, (NES_Quad){0,0,r.screen_width, r.screen_height}, (NES_Vector4){1,0,0,1});
+        // render_end(&r);
+            //TODO: Implement renderer that handles all of these rendering commands. Use stb for text renderering
+            for(int i = 0; i < renderCommands.length; i++) {
+                Clay_RenderCommand *renderCommand = &renderCommands.internalArray[i];
 
-            switch(renderCommand->commandType) {
-                // This command type should be skipped.
-                case CLAY_RENDER_COMMAND_TYPE_NONE:
-                break;
-                // The renderer should draw a solid color rectangle.
-                case CLAY_RENDER_COMMAND_TYPE_RECTANGLE:
-                    printf("Rectangle Rendering not currently implemented\n");
-                break;
-                // The renderer should draw a colored border inset into the bounding box.
-                case CLAY_RENDER_COMMAND_TYPE_BORDER:
-                    printf("Border Rendering not currently implemented\n");
-                break;
-                // The renderer should draw text.
-                case CLAY_RENDER_COMMAND_TYPE_TEXT:
-                    printf("Text Rendering not currently implemented\n");
-                break;
-                // The renderer should draw an image.
-                case CLAY_RENDER_COMMAND_TYPE_IMAGE:
-                    printf("Image Rendering not currently implemented\n");
-                break;
-                // The renderer should begin clipping all future draw commands, only rendering content that falls within the provided boundingBox.
-                case CLAY_RENDER_COMMAND_TYPE_SCISSOR_START:
-                    printf("Clipping not currently implemented\n");
-                break;
-                // The renderer should finish any previously active clipping, and begin rendering elements in full again.
-                case CLAY_RENDER_COMMAND_TYPE_SCISSOR_END:
-                    printf("Clipping not currently implemented\n");
-                break;
-                // The renderer should begin performing a "color overlay" on all subsequent render commands until disabled again.
-                case CLAY_RENDER_COMMAND_TYPE_OVERLAY_COLOR_START:
-                    printf("Colour Overlay not currently implemented\n");
-                break;
-                // The renderer should disable any previously active "color overlay" and render elements with their standard colors again.
-                case CLAY_RENDER_COMMAND_TYPE_OVERLAY_COLOR_END:
-                    printf("Colour Overlay not currently implemented\n");
-                break;
-                // The renderer should provide a custom implementation for handling this render command based on its .customData
-                case CLAY_RENDER_COMMAND_TYPE_CUSTOM:
-                    printf("Custom Rendering not currently implemented\n");
-                break;
+                switch(renderCommand->commandType) {
+                    // This command type should be skipped.
+                    case CLAY_RENDER_COMMAND_TYPE_NONE:
+                    break;
+                    // The renderer should draw a solid color rectangle.
+                    case CLAY_RENDER_COMMAND_TYPE_RECTANGLE:
+                        //TODO: Implement rounded corners
+                        render_draw_quad(&r, (NES_Quad){
+                            renderCommand->boundingBox.x,
+                            renderCommand->boundingBox.y,
+                            renderCommand->boundingBox.width,
+                            renderCommand->boundingBox.height,
+                        }, (NES_Vector4){
+                            renderCommand->renderData.rectangle.backgroundColor.r/255.0f,
+                            renderCommand->renderData.rectangle.backgroundColor.g/255.0f,
+                            renderCommand->renderData.rectangle.backgroundColor.b/255.0f,
+                            renderCommand->renderData.rectangle.backgroundColor.a/255.0f,
+                        });
+                        printf("Colour %i: (%f, %f, %f, %f)\n", i, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r);
+                    break;
+                    // The renderer should draw a colored border inset into the bounding box.
+                    case CLAY_RENDER_COMMAND_TYPE_BORDER:
+                        printf("Border Rendering not currently implemented\n");
+                    break;
+                    // The renderer should draw text.
+                    case CLAY_RENDER_COMMAND_TYPE_TEXT:
+                        printf("Text Rendering not currently implemented\n");
+                    break;
+                    // The renderer should draw an image.
+                    case CLAY_RENDER_COMMAND_TYPE_IMAGE:
+                        printf("Image Rendering not currently implemented\n");
+                    break;
+                    // The renderer should begin clipping all future draw commands, only rendering content that falls within the provided boundingBox.
+                    case CLAY_RENDER_COMMAND_TYPE_SCISSOR_START:
+                        printf("Clipping not currently implemented\n");
+                    break;
+                    // The renderer should finish any previously active clipping, and begin rendering elements in full again.
+                    case CLAY_RENDER_COMMAND_TYPE_SCISSOR_END:
+                        printf("Clipping not currently implemented\n");
+                    break;
+                    // The renderer should begin performing a "color overlay" on all subsequent render commands until disabled again.
+                    case CLAY_RENDER_COMMAND_TYPE_OVERLAY_COLOR_START:
+                        printf("Colour Overlay not currently implemented\n");
+                    break;
+                    // The renderer should disable any previously active "color overlay" and render elements with their standard colors again.
+                    case CLAY_RENDER_COMMAND_TYPE_OVERLAY_COLOR_END:
+                        printf("Colour Overlay not currently implemented\n");
+                    break;
+                    // The renderer should provide a custom implementation for handling this render command based on its .customData
+                    case CLAY_RENDER_COMMAND_TYPE_CUSTOM:
+                        printf("Custom Rendering not currently implemented\n");
+                    break;
+                }
             }
+        render_end(&r);
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+        gettimeofday(&stop, NULL); //Get the time at the end of the frame
+        dt = (stop.tv_sec - start.tv_sec) * 1000 + (stop.tv_usec - start.tv_usec) / 1000.0f; //Get the frame length
+        // If the frame took less time than the set frame rate, wait until the time is the frame rate
+        if(dt < FRAME_RATE) {
+            sleep_ms((int)FRAME_RATE - dt);
+            dt = FRAME_RATE;
         }
     }
+    glfwTerminate();
+    render_free(&r);
+
+    return 0;
 }
 
 int main_old(void) {
@@ -394,7 +423,7 @@ int main_old(void) {
     //Reading the data from a ROM
     //TODO: Make the rom path user inputable
     uint8_t *buf;
-    int sz = read_to_end("../super_mario_bros.nes", &buf, 0);
+    int sz = read_to_end("../roms/super_mario_bros.nes", &buf, 0);
     if(sz < 0) {
         fprintf(stderr, "Error when opening a file\n");
         return 0;
@@ -413,7 +442,7 @@ int main_old(void) {
         c.b->p->scroll_reg->s_ptr = 1;
         c.b->player_1 = calloc(1, sizeof(joypad));
         c.b->player_2 = calloc(1, sizeof(joypad));
-        r = render_init(); //Initialising the renderer
+        r = render_init(NULL); //Initialising the renderer
 
         struct timeval stop, start; //Store the start and end times of a frame
         float dt = 0.0f; //Holds the time passed between frames
@@ -444,6 +473,7 @@ int main_old(void) {
             //Doubling buffering the screen
             frame tile_frame[2] = {{0}, {0}};
             uint8_t curr_frame = 0;
+            PixelBuffer pb = pixelbuffer_init(FRAME_WIDTH, FRAME_HEIGHT, 3);
 
             while(!glfwWindowShouldClose(window) && !c.stop) {
                 gettimeofday(&start, NULL); //Getting time at start of frame
@@ -453,9 +483,11 @@ int main_old(void) {
                 glClear(GL_COLOR_BUFFER_BIT);
 
                 //Render the current frame
-                render_begin(&r);
-                    draw_frame(&r, &tile_frame[curr_frame]);
-                render_end(&r);
+                // render_begin(&r, &rb);
+                    // draw_frame(&r, &tile_frame[curr_frame]);
+                    pixelbuffer_updload_frame(&pb, &tile_frame[curr_frame]);
+                    render_draw_pixel_buffer(&r, &pb);
+                // render_end(&r, &rb);
 
                 //Clear the backbuffer
                 curr_frame = !curr_frame;
