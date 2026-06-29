@@ -28,11 +28,12 @@ if(NOT glfw_POPULATED)
 endif()
 
 # # Collect all .c files in current directory
-# file(GLOB C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
-# set(SOURCES ${C_SOURCES})
+file(GLOB C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c")
+set(SOURCES ${C_SOURCES})
 
 # Create the executable target
-add_executable(jes "${CMAKE_SOURCE_DIR}/main.c" "${CMAKE_SOURCE_DIR}/cpu.c" "${CMAKE_SOURCE_DIR}/ppu.c" "${CMAKE_SOURCE_DIR}/joypad.c" "${CMAKE_SOURCE_DIR}/bus.c" "${CMAKE_SOURCE_DIR}/glad.c")
+add_executable(jes ${SOURCES})
+# add_executable(jes "${CMAKE_SOURCE_DIR}/main.c" "${CMAKE_SOURCE_DIR}/cpu.c" "${CMAKE_SOURCE_DIR}/ppu.c" "${CMAKE_SOURCE_DIR}/joypad.c" "${CMAKE_SOURCE_DIR}/bus.c" "${CMAKE_SOURCE_DIR}/glad.c")
 
 target_compile_options(jes PRIVATE -fsanitize=address)
 target_link_options(jes PRIVATE -fsanitize=address)

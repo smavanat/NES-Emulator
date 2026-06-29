@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include "externals/glad.h"
+#include "../externals/glad.h"
 
 //Stores the entire system palette for use by the ppu
 uint8_t system_palette[64][3] = {

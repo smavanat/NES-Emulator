@@ -10,15 +10,17 @@
 #include <string.h>
 #include <sys/time.h>
 #include "cpu.h"
-#include "externals/glad.h"
-#include "externals/GLFW/glfw3.h"
+#include "../externals/glad.h"
+#include "../externals/GLFW/glfw3.h"
 #include "joypad.h"
 #include "ppu.h"
 
+#define CLAY_IMPLEMENTATION
+#include "../externals/clay.h"
+
 #define FRAME_RATE 1000 / 60.0f
 
-//TODO: Comments
-//      Debugger
+//TODO: Debugger
 //      JIT
 //      APU
 uint8_t stop = 0;
@@ -248,7 +250,144 @@ int init(GLFWwindow **window) {
     return 1;
 }
 
+//Clay functionality
+const Clay_Color COLOUR_LIGHT = (Clay_Color){224, 215, 210, 255};
+const Clay_Color COLOUR_RED = (Clay_Color){168, 66, 28, 255};
+const Clay_Color COLOUR_ORANGE = (Clay_Color){255, 138, 50, 255};
+
+void HandleClayErrors(Clay_ErrorData errorData) {
+    //NOTE: See Clay_ErrorData struct for more info
+    printf("%s\n", errorData.errorText.chars);
+    switch (errorData.errorType) {
+        //TODO:
+    }
+}
+
+//Example measure text function
+static inline Clay_Dimensions MeasureText(Clay_StringSlice text, Clay_TextElementConfig *config, uintptr_t userData) {
+    //Clay_TextElementConfig contains members such as fontId, fontSize, letterSpacing
+    //Note: Clay_String->chars is not guaranteed to be null terminated
+    return (Clay_Dimensions){
+        .width = text.length * config->fontSize, //Only works for monospace fonts
+        .height = config->fontSize
+    };
+}
+
+//Layout config is just a struct that can be declared statically or inline
+Clay_ElementDeclaration sidebarItemConfig = (Clay_ElementDeclaration){
+    .layout = {
+        .sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_FIXED(50)}
+    },
+    .backgroundColor = COLOUR_ORANGE
+};
+
+//Reusable components are just normal functions
+void SidebarItemComponent() {
+    CLAY(CLAY_ID("Sidebar"), sidebarItemConfig) {
+        //Children go here
+    }
+}
+
 int main(void) {
+    uint64_t totalMemorySize = Clay_MinMemorySize();
+    Clay_Arena arena = Clay_CreateArenaWithCapacityAndMemory(totalMemorySize, malloc(totalMemorySize));
+
+    init(&window);
+    r = render_init(); //Initialising the renderer
+    Clay_Initialize(arena, (Clay_Dimensions){r.screen_width, r.screen_height}, (Clay_ErrorHandler){HandleClayErrors});
+
+    struct timeval stop, start; //Store the start and end times of a frame
+    float dt = 0.0f; //Holds the time passed between frames
+
+    while(!glfwWindowShouldClose(window)) {
+        gettimeofday(&start, NULL); //Getting time at start of frame
+
+        //Clear the screen
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        //Update Clay internal layout dimensions to support resizing
+        Clay_SetLayoutDimensions((Clay_Dimensions){r.screen_width, r.screen_height});
+        //TODO:Update internal pointer position for handling mouseover/click/touch events
+        //Clay_SetPointerState((Clay_Vector2){mouseX, mouseY}, isMouseDown);
+        //Clay_UpdateScrollContainers(true, (Clay_Vector2){mouseWheelX, mouseWheelY}, dt);
+
+        //All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
+        Clay_BeginLayout();
+
+        //Clay example UI with a fixed width sidebar and flexible width main content
+        CLAY(CLAY_ID("OuterContainer"), { .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 16},
+             .backgroundColor = {250, 250, 255, 255}}) {
+            CLAY(CLAY_ID("SideBar"), {
+                .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {.width = CLAY_SIZING_FIXED(300), .height = CLAY_SIZING_GROW(0)}},
+                .backgroundColor = COLOUR_LIGHT
+            }) {
+                CLAY(CLAY_ID("ProfilePictureOuter"), {.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 16,
+                .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}}, .backgroundColor = COLOUR_RED}) {
+                    CLAY_TEXT(CLAY_STRING("Clay - UI Library"), {.fontSize = 24, .textColor = {255, 255, 255, 255}});
+                }
+
+                // Standard C code like loops etc work inside components
+                for (int i = 0; i < 5; i++) {
+                    SidebarItemComponent();
+                }
+
+                CLAY(CLAY_ID("MainContent"), { .layout = { .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0) } }, .backgroundColor = COLOUR_LIGHT }) {}
+             }
+        }
+
+        // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
+        Clay_RenderCommandArray renderCommands = Clay_EndLayout(dt); // deltaTime is the time since the last frame, and is used for transitions
+
+        //TODO: Implement renderer that handles all of these rendering commands. Use stb for text renderering
+        for(int i = 0; i < renderCommands.length; i++) {
+            Clay_RenderCommand *renderCommand = &renderCommands.internalArray[i];
+
+            switch(renderCommand->commandType) {
+                // This command type should be skipped.
+                case CLAY_RENDER_COMMAND_TYPE_NONE:
+                break;
+                // The renderer should draw a solid color rectangle.
+                case CLAY_RENDER_COMMAND_TYPE_RECTANGLE:
+                    printf("Rectangle Rendering not currently implemented\n");
+                break;
+                // The renderer should draw a colored border inset into the bounding box.
+                case CLAY_RENDER_COMMAND_TYPE_BORDER:
+                    printf("Border Rendering not currently implemented\n");
+                break;
+                // The renderer should draw text.
+                case CLAY_RENDER_COMMAND_TYPE_TEXT:
+                    printf("Text Rendering not currently implemented\n");
+                break;
+                // The renderer should draw an image.
+                case CLAY_RENDER_COMMAND_TYPE_IMAGE:
+                    printf("Image Rendering not currently implemented\n");
+                break;
+                // The renderer should begin clipping all future draw commands, only rendering content that falls within the provided boundingBox.
+                case CLAY_RENDER_COMMAND_TYPE_SCISSOR_START:
+                    printf("Clipping not currently implemented\n");
+                break;
+                // The renderer should finish any previously active clipping, and begin rendering elements in full again.
+                case CLAY_RENDER_COMMAND_TYPE_SCISSOR_END:
+                    printf("Clipping not currently implemented\n");
+                break;
+                // The renderer should begin performing a "color overlay" on all subsequent render commands until disabled again.
+                case CLAY_RENDER_COMMAND_TYPE_OVERLAY_COLOR_START:
+                    printf("Colour Overlay not currently implemented\n");
+                break;
+                // The renderer should disable any previously active "color overlay" and render elements with their standard colors again.
+                case CLAY_RENDER_COMMAND_TYPE_OVERLAY_COLOR_END:
+                    printf("Colour Overlay not currently implemented\n");
+                break;
+                // The renderer should provide a custom implementation for handling this render command based on its .customData
+                case CLAY_RENDER_COMMAND_TYPE_CUSTOM:
+                    printf("Custom Rendering not currently implemented\n");
+                break;
+            }
+        }
+    }
+}
+
+int main_old(void) {
     c.sp = 0xFF; //Setting stack pointer to top of stack
     c.proc_stat_reg = 0x34; //Setting BREAK and UNUSED flags
 
