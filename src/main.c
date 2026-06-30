@@ -14,6 +14,7 @@
 #include "../externals/GLFW/glfw3.h"
 #include "joypad.h"
 #include "ppu.h"
+#include "renderer.h"
 
 #define CLAY_IMPLEMENTATION
 #include "../externals/clay.h"
@@ -293,7 +294,7 @@ int main_new(void) {
     Clay_Arena arena = Clay_CreateArenaWithCapacityAndMemory(totalMemorySize, malloc(totalMemorySize));
 
     init(&window);
-    r = render_init(NULL); //Initialising the renderer
+    r = render_init(NULL, INITIAL_SCREEN_WIDTH, INITIAL_SCREEN_HEIGHT); //Initialising the renderer
     Clay_Initialize(arena, (Clay_Dimensions){r.screen_width, r.screen_height}, (Clay_ErrorHandler){HandleClayErrors});
 
     struct timeval stop, start; //Store the start and end times of a frame
@@ -442,7 +443,7 @@ int main(void) {
         c.b->p->scroll_reg->s_ptr = 1;
         c.b->player_1 = calloc(1, sizeof(joypad));
         c.b->player_2 = calloc(1, sizeof(joypad));
-        r = render_init(NULL); //Initialising the renderer
+        r = render_init(NULL, INITIAL_SCREEN_WIDTH, INITIAL_SCREEN_HEIGHT); //Initialising the renderer
 
         struct timeval stop, start; //Store the start and end times of a frame
         float dt = 0.0f; //Holds the time passed between frames
@@ -485,7 +486,7 @@ int main(void) {
                 //Render the current frame
                 // render_begin(&r, &rb);
                     // draw_frame(&r, &tile_frame[curr_frame]);
-                    pixelbuffer_updload_frame(&pb, &tile_frame[curr_frame]);
+                    pixelbuffer_updload_data(&pb, (uint8_t *)&tile_frame[curr_frame].data);
                     render_draw_pixel_buffer(&r, &pb);
                 // render_end(&r, &rb);
 
