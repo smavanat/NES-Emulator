@@ -65,7 +65,8 @@ typedef struct {
 
 //Initialises a texture atlas
 //Optionally packs a single white pixel at the start of the texture atlas to render a solid quad
-TextureAtlas atlas_init(uint32_t width, uint32_t height, uint8_t pixel_size, uint8_t solid);
+TextureAtlas atlas_init(uint32_t width, uint32_t height, uint32_t texture, uint8_t pixel_size);
+TextureAtlas atlas_init_blank(uint32_t width, uint32_t height, uint8_t pixel_size);
 //Returns the UV rect where the texture was placed
 //pixel_size must be either 3 or 4. If it does not match the pixel size of the atlas,
 //an empty quad will returned as the pixel formats are different
@@ -73,7 +74,6 @@ NES_Quad atlas_pack(TextureAtlas *a, uint8_t* pixels, size_t w, size_t h, uint8_
 void atlas_free(TextureAtlas *a);
 
 //TODO: Add a way of ordering textures in the renderer (some sort of depth filter)
-//      Figure out what is going to happen with multiple atlases
 
 //Represents a single batch sent off in a draw call from a texture atlas
 typedef struct {
@@ -105,23 +105,29 @@ typedef struct {
     uint32_t ebo; //ebo this renderer uses
     uint32_t shader; //shader this renderer uses
 
+    size_t tex_atlas_capacity;
+    size_t num_text_atlas;
     uint32_t screen_height;
     uint32_t screen_width;
 } Renderer;
 
-#define GET_ATLAS_BATCH(r) (r)->rb[(r)->atlas_batch_ptr]
-#define GET_DEBUG_BATCH(r) (r)->db[(r)->debug_batch_ptr]
+#define GET_ATLAS_BATCH(r, i) (r)->rb[i]
 
 //Initialises the pixel renderer
-Renderer render_init(TextureAtlas *a, size_t width, size_t height);
+Renderer render_init(size_t width, size_t height);
 //Frees a pixel renderer
 void render_free(Renderer *r);
 //Sets up the variables for renderering to the pbo from the Renderer
 void render_begin(Renderer *r);
 //Ends rendering to the current pixel frame
 void render_end(Renderer *r);
+//Adds a texture atlas to the render's context and returns a reference to
+//use the texture atlas by
+//TODO: Add a way to return a failure value to this
+//      Add a way to remove an atlas efficiently
+uint32_t add_texture_atlas(Renderer *r, TextureAtlas *ta);
 //Draws a quad
-void render_draw_atlas_quad(Renderer *r, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour);
+void render_draw_atlas_quad(Renderer *r, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour, uint32_t atlas);
 //Draws a dynamically allocated texture
 void render_draw_pixel_texture(Renderer *r, uint32_t texture, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour);
 //Draws a frame straight to a texture by uploading it to a pixel buffer

@@ -15,6 +15,10 @@
 #include "joypad.h"
 #include "ppu.h"
 #include "renderer.h"
+#include "bitmap_font.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "../externals/stb_image.h"
 
 #define CLAY_IMPLEMENTATION
 #include "../externals/clay.h"
@@ -289,13 +293,63 @@ void SidebarItemComponent(int index) {
     }
 }
 
-int main_new(void) {
+uint32_t load_atlas(char *path, TextureAtlas *ta) {
+    uint32_t texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    // set the texture wrapping/filtering options (on the currently bound texture object)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    // load and generate the texture
+    int width, height, nrChannels;
+    unsigned char *data = stbi_load(path, &width, &height, &nrChannels, 0);
+    printf("width=%d height=%d channels=%d\n", width, height, nrChannels);
+    if (data) {
+        GLenum format;
+        switch (nrChannels) {
+            case 1: format = GL_RED; break;
+            case 2: format = GL_RG; break;
+            case 3: format = GL_RGB; break;
+            case 4: format = GL_RGBA; break;
+        }
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+    }
+    else {
+        fprintf(stderr, "Failed to load texture at path %s\n", path);
+        return 0;
+    }
+    stbi_image_free(data);
+
+    *ta = atlas_init(width, height, texture, 3);
+
+    return 1;
+}
+
+Clay_Dimensions clay_measure_text_cb(Clay_StringSlice text, Clay_TextElementConfig *config, void *userData) {
+    //TODO: Figure out how to convert the config.fontSize variable to measure the scale of the lettering
+    NES_Vector2 res = bitmap_measure_text(text.chars, text.length, (NES_Vector2){config->letterSpacing, config->lineHeight}, (NES_Vector2){20, 20});
+
+    return (Clay_Dimensions){res.x, res.y};
+}
+
+int main(void) {
     uint64_t totalMemorySize = Clay_MinMemorySize();
     Clay_Arena arena = Clay_CreateArenaWithCapacityAndMemory(totalMemorySize, malloc(totalMemorySize));
 
     init(&window);
-    r = render_init(NULL, INITIAL_SCREEN_WIDTH, INITIAL_SCREEN_HEIGHT); //Initialising the renderer
+    r = render_init(INITIAL_SCREEN_WIDTH, INITIAL_SCREEN_HEIGHT); //Initialising the renderer
+    TextureAtlas ta = {0};
+    load_atlas("../minogram_6x10.png", &ta);
+    uint32_t idx = add_texture_atlas(&r, &ta);
+
+    Bitmap_Font_Desc bitmap = {0};
+    bitmap_font_init(&bitmap, idx, ta.width, ta.height, 6, 10, 0, 0, 0, 0, BITMAP_CUSTOM, (union layout_desc){.custom_desc = {.data = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-=()[]{}<>/*:#%!?.,'\"@&$", .len = 87}});
+
     Clay_Initialize(arena, (Clay_Dimensions){r.screen_width, r.screen_height}, (Clay_ErrorHandler){HandleClayErrors});
+    Clay_SetMeasureTextFunction(clay_measure_text_cb, NULL);
 
     struct timeval stop, start; //Store the start and end times of a frame
     float dt = 0.0f; //Holds the time passed between frames
@@ -340,8 +394,6 @@ int main_new(void) {
         Clay_RenderCommandArray renderCommands = Clay_EndLayout(dt); // deltaTime is the time since the last frame, and is used for transitions
 
         render_begin(&r);
-        //     render_draw_quad(&r, (NES_Quad){0,0,r.screen_width, r.screen_height}, (NES_Vector4){1,0,0,1});
-        // render_end(&r);
             //TODO: Implement renderer that handles all of these rendering commands. Use stb for text renderering
             for(int i = 0; i < renderCommands.length; i++) {
                 Clay_RenderCommand *renderCommand = &renderCommands.internalArray[i];
@@ -353,26 +405,36 @@ int main_new(void) {
                     // The renderer should draw a solid color rectangle.
                     case CLAY_RENDER_COMMAND_TYPE_RECTANGLE:
                         //TODO: Implement rounded corners
-                        render_draw_quad(&r, (NES_Quad){
-                            renderCommand->boundingBox.x,
-                            renderCommand->boundingBox.y,
-                            renderCommand->boundingBox.width,
-                            renderCommand->boundingBox.height,
-                        }, (NES_Vector4){
-                            renderCommand->renderData.rectangle.backgroundColor.r/255.0f,
-                            renderCommand->renderData.rectangle.backgroundColor.g/255.0f,
-                            renderCommand->renderData.rectangle.backgroundColor.b/255.0f,
-                            renderCommand->renderData.rectangle.backgroundColor.a/255.0f,
-                        });
-                        printf("Colour %i: (%f, %f, %f, %f)\n", i, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r);
+                        // render_draw_quad(&r, (NES_Quad){
+                        //     renderCommand->boundingBox.x,
+                        //     renderCommand->boundingBox.y,
+                        //     renderCommand->boundingBox.width,
+                        //     renderCommand->boundingBox.height,
+                        // }, (NES_Vector4){
+                        //     renderCommand->renderData.rectangle.backgroundColor.r/255.0f,
+                        //     renderCommand->renderData.rectangle.backgroundColor.g/255.0f,
+                        //     renderCommand->renderData.rectangle.backgroundColor.b/255.0f,
+                        //     renderCommand->renderData.rectangle.backgroundColor.a/255.0f,
+                        // });
+                        // printf("Colour %i: (%f, %f, %f, %f)\n", i, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r);
                     break;
                     // The renderer should draw a colored border inset into the bounding box.
                     case CLAY_RENDER_COMMAND_TYPE_BORDER:
                         printf("Border Rendering not currently implemented\n");
                     break;
                     // The renderer should draw text.
-                    case CLAY_RENDER_COMMAND_TYPE_TEXT:
-                        printf("Text Rendering not currently implemented\n");
+                    case CLAY_RENDER_COMMAND_TYPE_TEXT: {
+                        Clay_TextRenderData data = renderCommand->renderData.text;
+                        bitmap_draw_string(&r, &bitmap, data.stringContents.chars, data.stringContents.length, (NES_Vector2) {data.letterSpacing, data.lineHeight},
+                                           (NES_Vector2){renderCommand->boundingBox.x, renderCommand->boundingBox.y}, (NES_Vector2){20,20},
+                                           (NES_Vector4) {
+                                                data.textColor.r/255.0f,
+                                                data.textColor.g/255.0f,
+                                                data.textColor.b/255.0f,
+                                                data.textColor.a/255.0f,
+                                           });
+                    }
+                        // printf("Text Rendering not currently implemented\n");
                     break;
                     // The renderer should draw an image.
                     case CLAY_RENDER_COMMAND_TYPE_IMAGE:
@@ -412,12 +474,14 @@ int main_new(void) {
         }
     }
     glfwTerminate();
+    bitmap_font_free(&bitmap);
+    atlas_free(&ta);
     render_free(&r);
 
     return 0;
 }
 
-int main(void) {
+int main_old(void) {
     c.sp = 0xFF; //Setting stack pointer to top of stack
     c.proc_stat_reg = 0x34; //Setting BREAK and UNUSED flags
 
@@ -443,7 +507,7 @@ int main(void) {
         c.b->p->scroll_reg->s_ptr = 1;
         c.b->player_1 = calloc(1, sizeof(joypad));
         c.b->player_2 = calloc(1, sizeof(joypad));
-        r = render_init(NULL, INITIAL_SCREEN_WIDTH, INITIAL_SCREEN_HEIGHT); //Initialising the renderer
+        r = render_init(INITIAL_SCREEN_WIDTH, INITIAL_SCREEN_HEIGHT); //Initialising the renderer
 
         struct timeval stop, start; //Store the start and end times of a frame
         float dt = 0.0f; //Holds the time passed between frames
