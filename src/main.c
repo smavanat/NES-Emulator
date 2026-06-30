@@ -342,7 +342,7 @@ int main(void) {
     init(&window);
     r = render_init(INITIAL_SCREEN_WIDTH, INITIAL_SCREEN_HEIGHT); //Initialising the renderer
     TextureAtlas ta = {0};
-    load_atlas("../minogram_6x10.png", &ta);
+    load_atlas("../minogram_6x10.png", &ta); //This bitmap png is from: https://frostyfreeze.itch.io/pixel-bitmap-fonts-png-xml
     uint32_t idx = add_texture_atlas(&r, &ta);
 
     Bitmap_Font_Desc bitmap = {0};

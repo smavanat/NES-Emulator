@@ -103,6 +103,7 @@ uint8_t bitmap_draw_string(Renderer *r, Bitmap_Font_Desc *bf, const char *str, s
             continue;
             case ' ':
                 x += scale.x + gap.x;
+            continue;
             default:
             break;
         }
