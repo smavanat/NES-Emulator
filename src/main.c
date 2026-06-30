@@ -288,7 +288,7 @@ void SidebarItemComponent(int index) {
     }
 }
 
-int main(void) {
+int main_new(void) {
     uint64_t totalMemorySize = Clay_MinMemorySize();
     Clay_Arena arena = Clay_CreateArenaWithCapacityAndMemory(totalMemorySize, malloc(totalMemorySize));
 
@@ -416,14 +416,14 @@ int main(void) {
     return 0;
 }
 
-int main_old(void) {
+int main(void) {
     c.sp = 0xFF; //Setting stack pointer to top of stack
     c.proc_stat_reg = 0x34; //Setting BREAK and UNUSED flags
 
     //Reading the data from a ROM
     //TODO: Make the rom path user inputable
     uint8_t *buf;
-    int sz = read_to_end("../roms/super_mario_bros.nes", &buf, 0);
+    int sz = read_to_end("../roms/zelda.nes", &buf, 0);
     if(sz < 0) {
         fprintf(stderr, "Error when opening a file\n");
         return 0;
@@ -510,7 +510,7 @@ int main_old(void) {
 
                     size_t cycles; //Number of cycles for this cpu instruction
                     //If an IRQ occurs
-                    if(c.b->p->rom->irq_pending && !get_cpu_flag(&c, INTERRUPT_DISABLE)) {
+                    if(c.b->p->rom->irq_pending && !get_cpu_flag(&c, CPU_INTERRUPT_DISABLE)) {
                         cycles = 7;
                         interrupt_irq(&c);
                     }

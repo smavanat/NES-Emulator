@@ -7,277 +7,277 @@
 //Since every NES instruction has a disassemly value between 0x00 and 0xFF, can just make a 256 value array storing all the  opcodes,
 //addressing mode, and cycle count for every instruction as a very quick way of getting an instruction from its machine code value
 instruction instructions[256] = {
-    (instruction){BRK, IMMEDIATE, 7},       // 0x00
-    (instruction){ORA, INDIRECT_X, 6},      // 0x01
-    (instruction){STP, IMPLICIT, 2},        // 0x02
-    (instruction){SLO, INDIRECT_X, 8},      // 0x03 - unofficial
-    (instruction){NOP, ZERO_PAGE, 3},       // 0x04 - unofficial
-    (instruction){ORA, ZERO_PAGE, 3},       // 0x05
-    (instruction){ASL, ZERO_PAGE, 5},       // 0x06
-    (instruction){SLO, ZERO_PAGE, 5},       // 0x07 - unofficial
-    (instruction){PHP, IMPLICIT, 3},        // 0x08
-    (instruction){ORA, IMMEDIATE, 2},       // 0x09
-    (instruction){ASL, ACCUMULATOR, 2},     // 0x0a
-    (instruction){ANC, IMMEDIATE, 2},       // 0x0b - unofficial
-    (instruction){NOP, ABSOLUTE, 4},        // 0x0c - unofficial
-    (instruction){ORA, ABSOLUTE, 4},        // 0x0d
-    (instruction){ASL, ABSOLUTE, 6},        // 0x0e
-    (instruction){SLO, ABSOLUTE, 6},        // 0x0f - unofficial
+    (instruction){CPU_OPCODE_BRK, CPU_ADDR_IMMEDIATE, 7},       // 0x00
+    (instruction){CPU_OPCODE_ORA, CPU_ADDR_INDIRECT_X, 6},      // 0x01
+    (instruction){CPU_OPCODE_STP, CPU_ADDR_IMPLICIT, 2},        // 0x02
+    (instruction){CPU_OPCODE_SLO, CPU_ADDR_INDIRECT_X, 8},      // 0x03 - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ZERO_PAGE, 3},       // 0x04 - unofficial
+    (instruction){CPU_OPCODE_ORA, CPU_ADDR_ZERO_PAGE, 3},       // 0x05
+    (instruction){CPU_OPCODE_ASL, CPU_ADDR_ZERO_PAGE, 5},       // 0x06
+    (instruction){CPU_OPCODE_SLO, CPU_ADDR_ZERO_PAGE, 5},       // 0x07 - unofficial
+    (instruction){CPU_OPCODE_PHP, CPU_ADDR_IMPLICIT, 3},        // 0x08
+    (instruction){CPU_OPCODE_ORA, CPU_ADDR_IMMEDIATE, 2},       // 0x09
+    (instruction){CPU_OPCODE_ASL, CPU_ADDR_ACCUMULATOR, 2},     // 0x0a
+    (instruction){CPU_OPCODE_ANC, CPU_ADDR_IMMEDIATE, 2},       // 0x0b - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ABSOLUTE, 4},        // 0x0c - unofficial
+    (instruction){CPU_OPCODE_ORA, CPU_ADDR_ABSOLUTE, 4},        // 0x0d
+    (instruction){CPU_OPCODE_ASL, CPU_ADDR_ABSOLUTE, 6},        // 0x0e
+    (instruction){CPU_OPCODE_SLO, CPU_ADDR_ABSOLUTE, 6},        // 0x0f - unofficial
 
-    (instruction){BPL, RELATIVE, 2},        // 0x10
-    (instruction){ORA, INDIRECT_Y, 5},      // 0x11
-    (instruction){STP, IMPLICIT, 2},        // 0x12
-    (instruction){SLO, INDIRECT_Y, 8},      // 0x13 - unofficial
-    (instruction){NOP, ZERO_PAGE_X, 4},     // 0x14 - unofficial
-    (instruction){ORA, ZERO_PAGE_X, 4},     // 0x15
-    (instruction){ASL, ZERO_PAGE_X, 6},     // 0x16
-    (instruction){SLO, ZERO_PAGE_X, 6},     // 0x17 - unofficial
-    (instruction){CLC, IMPLICIT, 2},        // 0x18
-    (instruction){ORA, ABSOLUTE_Y, 4},      // 0x19
-    (instruction){NOP, IMPLICIT, 2},        // 0x1a - unofficial
-    (instruction){SLO, ABSOLUTE_X, 7},      // 0x1b - unofficial
-    (instruction){NOP, ABSOLUTE_X, 4},      // 0x1c - unofficial
-    (instruction){ORA, ABSOLUTE_X, 4},      // 0x1d
-    (instruction){ASL, ABSOLUTE_X, 7},      // 0x1e
-    (instruction){SLO, ABSOLUTE_X, 7},      // 0x1f - unofficial
+    (instruction){CPU_OPCODE_BPL, CPU_ADDR_RELATIVE, 2},        // 0x10
+    (instruction){CPU_OPCODE_ORA, CPU_ADDR_INDIRECT_Y, 5},      // 0x11
+    (instruction){CPU_OPCODE_STP, CPU_ADDR_IMPLICIT, 2},        // 0x12
+    (instruction){CPU_OPCODE_SLO, CPU_ADDR_INDIRECT_Y, 8},      // 0x13 - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ZERO_PAGE_X, 4},     // 0x14 - unofficial
+    (instruction){CPU_OPCODE_ORA, CPU_ADDR_ZERO_PAGE_X, 4},     // 0x15
+    (instruction){CPU_OPCODE_ASL, CPU_ADDR_ZERO_PAGE_X, 6},     // 0x16
+    (instruction){CPU_OPCODE_SLO, CPU_ADDR_ZERO_PAGE_X, 6},     // 0x17 - unofficial
+    (instruction){CPU_OPCODE_CLC, CPU_ADDR_IMPLICIT, 2},        // 0x18
+    (instruction){CPU_OPCODE_ORA, CPU_ADDR_ABSOLUTE_Y, 4},      // 0x19
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_IMPLICIT, 2},        // 0x1a - unofficial
+    (instruction){CPU_OPCODE_SLO, CPU_ADDR_ABSOLUTE_X, 7},      // 0x1b - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ABSOLUTE_X, 4},      // 0x1c - unofficial
+    (instruction){CPU_OPCODE_ORA, CPU_ADDR_ABSOLUTE_X, 4},      // 0x1d
+    (instruction){CPU_OPCODE_ASL, CPU_ADDR_ABSOLUTE_X, 7},      // 0x1e
+    (instruction){CPU_OPCODE_SLO, CPU_ADDR_ABSOLUTE_X, 7},      // 0x1f - unofficial
 
-    (instruction){JSR, ABSOLUTE, 6},        // 0x20
-    (instruction){AND, INDIRECT_X, 6},      // 0x21
-    (instruction){STP, IMPLICIT, 2},        // 0x22
-    (instruction){RLA, INDIRECT_X, 8},      // 0x23 - unofficial
-    (instruction){BIT, ZERO_PAGE, 3},       // 0x24
-    (instruction){AND, ZERO_PAGE, 3},       // 0x25
-    (instruction){ROL, ZERO_PAGE, 5},       // 0x26
-    (instruction){RLA, ZERO_PAGE, 5},       // 0x27 - unofficial
-    (instruction){PLP, IMPLICIT, 4},        // 0x28
-    (instruction){AND, IMMEDIATE, 2},       // 0x29
-    (instruction){ROL, ACCUMULATOR, 2},     // 0x2a
-    (instruction){ANC, IMPLICIT, 2},        // 0x2b
-    (instruction){BIT, ABSOLUTE, 4},        // 0x2c
-    (instruction){AND, ABSOLUTE, 4},        // 0x2d
-    (instruction){ROL, ABSOLUTE, 6},        // 0x2e
-    (instruction){RLA, ABSOLUTE, 6},        // 0x2f - unofficial
+    (instruction){CPU_OPCODE_JSR, CPU_ADDR_ABSOLUTE, 6},        // 0x20
+    (instruction){CPU_OPCODE_AND, CPU_ADDR_INDIRECT_X, 6},      // 0x21
+    (instruction){CPU_OPCODE_STP, CPU_ADDR_IMPLICIT, 2},        // 0x22
+    (instruction){CPU_OPCODE_RLA, CPU_ADDR_INDIRECT_X, 8},      // 0x23 - unofficial
+    (instruction){CPU_OPCODE_BIT, CPU_ADDR_ZERO_PAGE, 3},       // 0x24
+    (instruction){CPU_OPCODE_AND, CPU_ADDR_ZERO_PAGE, 3},       // 0x25
+    (instruction){CPU_OPCODE_ROL, CPU_ADDR_ZERO_PAGE, 5},       // 0x26
+    (instruction){CPU_OPCODE_RLA, CPU_ADDR_ZERO_PAGE, 5},       // 0x27 - unofficial
+    (instruction){CPU_OPCODE_PLP, CPU_ADDR_IMPLICIT, 4},        // 0x28
+    (instruction){CPU_OPCODE_AND, CPU_ADDR_IMMEDIATE, 2},       // 0x29
+    (instruction){CPU_OPCODE_ROL, CPU_ADDR_ACCUMULATOR, 2},     // 0x2a
+    (instruction){CPU_OPCODE_ANC, CPU_ADDR_IMPLICIT, 2},        // 0x2b
+    (instruction){CPU_OPCODE_BIT, CPU_ADDR_ABSOLUTE, 4},        // 0x2c
+    (instruction){CPU_OPCODE_AND, CPU_ADDR_ABSOLUTE, 4},        // 0x2d
+    (instruction){CPU_OPCODE_ROL, CPU_ADDR_ABSOLUTE, 6},        // 0x2e
+    (instruction){CPU_OPCODE_RLA, CPU_ADDR_ABSOLUTE, 6},        // 0x2f - unofficial
 
-    (instruction){BMI, RELATIVE, 2},        // 0x30
-    (instruction){AND, INDIRECT_Y, 5},      // 0x31
-    (instruction){STP, IMPLICIT, 2},        // 0x32
-    (instruction){RLA, INDIRECT_Y, 8},      // 0x33 - unofficial
-    (instruction){NOP, ZERO_PAGE_X, 4},     // 0x34 - unofficial
-    (instruction){AND, ZERO_PAGE_X, 4},     // 0x35
-    (instruction){ROL, ZERO_PAGE_X, 6},     // 0x36
-    (instruction){RLA, ZERO_PAGE_X, 6},     // 0x37 - unofficial
-    (instruction){SEC, IMPLICIT, 2},        // 0x38
-    (instruction){AND, ABSOLUTE_Y, 4},      // 0x39
-    (instruction){NOP, IMPLICIT, 2},        // 0x3a - unofficial
-    (instruction){RLA, ABSOLUTE_Y, 7},      // 0x3b - unofficial
-    (instruction){NOP, ABSOLUTE_X, 4},      // 0x3c - unofficial
-    (instruction){AND, ABSOLUTE_X, 4},      // 0x3d
-    (instruction){ROL, ABSOLUTE_X, 7},      // 0x3e
-    (instruction){RLA, ABSOLUTE_X, 7},      // 0x3f - unofficial
+    (instruction){CPU_OPCODE_BMI, CPU_ADDR_RELATIVE, 2},        // 0x30
+    (instruction){CPU_OPCODE_AND, CPU_ADDR_INDIRECT_Y, 5},      // 0x31
+    (instruction){CPU_OPCODE_STP, CPU_ADDR_IMPLICIT, 2},        // 0x32
+    (instruction){CPU_OPCODE_RLA, CPU_ADDR_INDIRECT_Y, 8},      // 0x33 - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ZERO_PAGE_X, 4},     // 0x34 - unofficial
+    (instruction){CPU_OPCODE_AND, CPU_ADDR_ZERO_PAGE_X, 4},     // 0x35
+    (instruction){CPU_OPCODE_ROL, CPU_ADDR_ZERO_PAGE_X, 6},     // 0x36
+    (instruction){CPU_OPCODE_RLA, CPU_ADDR_ZERO_PAGE_X, 6},     // 0x37 - unofficial
+    (instruction){CPU_OPCODE_SEC, CPU_ADDR_IMPLICIT, 2},        // 0x38
+    (instruction){CPU_OPCODE_AND, CPU_ADDR_ABSOLUTE_Y, 4},      // 0x39
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_IMPLICIT, 2},        // 0x3a - unofficial
+    (instruction){CPU_OPCODE_RLA, CPU_ADDR_ABSOLUTE_Y, 7},      // 0x3b - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ABSOLUTE_X, 4},      // 0x3c - unofficial
+    (instruction){CPU_OPCODE_AND, CPU_ADDR_ABSOLUTE_X, 4},      // 0x3d
+    (instruction){CPU_OPCODE_ROL, CPU_ADDR_ABSOLUTE_X, 7},      // 0x3e
+    (instruction){CPU_OPCODE_RLA, CPU_ADDR_ABSOLUTE_X, 7},      // 0x3f - unofficial
 
-    (instruction){RTI, IMPLICIT, 6},        // 0x40
-    (instruction){XOR, INDIRECT_X, 6},      // 0x41
-    (instruction){STP, IMPLICIT, 2},        // 0x42
-    (instruction){SRE, INDIRECT_X, 8},      // 0x43 - unofficial
-    (instruction){NOP, ZERO_PAGE, 3},       // 0x44 - unofficial
-    (instruction){XOR, ZERO_PAGE, 3},       // 0x45
-    (instruction){LSR, ZERO_PAGE, 5},       // 0x46
-    (instruction){SRE, ZERO_PAGE, 5},       // 0x47 - unofficial
-    (instruction){PHA, IMPLICIT, 3},        // 0x48
-    (instruction){XOR, IMMEDIATE, 2},       // 0x49
-    (instruction){LSR, ACCUMULATOR, 2},     // 0x4a
-    (instruction){ALR, IMMEDIATE, 2},       // 0x4b - unofficial
-    (instruction){JMP, ABSOLUTE, 3},        // 0x4c
-    (instruction){XOR, ABSOLUTE, 4},        // 0x4d
-    (instruction){LSR, ABSOLUTE, 6},        // 0x4e
-    (instruction){SRE, ABSOLUTE, 6},        // 0x4f - unofficial
+    (instruction){CPU_OPCODE_RTI, CPU_ADDR_IMPLICIT, 6},        // 0x40
+    (instruction){CPU_OPCODE_XOR, CPU_ADDR_INDIRECT_X, 6},      // 0x41
+    (instruction){CPU_OPCODE_STP, CPU_ADDR_IMPLICIT, 2},        // 0x42
+    (instruction){CPU_OPCODE_SRE, CPU_ADDR_INDIRECT_X, 8},      // 0x43 - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ZERO_PAGE, 3},       // 0x44 - unofficial
+    (instruction){CPU_OPCODE_XOR, CPU_ADDR_ZERO_PAGE, 3},       // 0x45
+    (instruction){CPU_OPCODE_LSR, CPU_ADDR_ZERO_PAGE, 5},       // 0x46
+    (instruction){CPU_OPCODE_SRE, CPU_ADDR_ZERO_PAGE, 5},       // 0x47 - unofficial
+    (instruction){CPU_OPCODE_PHA, CPU_ADDR_IMPLICIT, 3},        // 0x48
+    (instruction){CPU_OPCODE_XOR, CPU_ADDR_IMMEDIATE, 2},       // 0x49
+    (instruction){CPU_OPCODE_LSR, CPU_ADDR_ACCUMULATOR, 2},     // 0x4a
+    (instruction){CPU_OPCODE_ALR, CPU_ADDR_IMMEDIATE, 2},       // 0x4b - unofficial
+    (instruction){CPU_OPCODE_JMP, CPU_ADDR_ABSOLUTE, 3},        // 0x4c
+    (instruction){CPU_OPCODE_XOR, CPU_ADDR_ABSOLUTE, 4},        // 0x4d
+    (instruction){CPU_OPCODE_LSR, CPU_ADDR_ABSOLUTE, 6},        // 0x4e
+    (instruction){CPU_OPCODE_SRE, CPU_ADDR_ABSOLUTE, 6},        // 0x4f - unofficial
 
-    (instruction){BVC, RELATIVE, 2},        // 0x50
-    (instruction){XOR, INDIRECT_Y, 5},      // 0x51
-    (instruction){STP, IMPLICIT, 2},        // 0x52
-    (instruction){SRE, INDIRECT_Y, 8},      // 0x53 - unofficial
-    (instruction){NOP, ZERO_PAGE_X, 4},     // 0x54 - unofficial
-    (instruction){XOR, ZERO_PAGE_X, 4},     // 0x55
-    (instruction){LSR, ZERO_PAGE_X, 6},     // 0x56
-    (instruction){SRE, ZERO_PAGE_X, 6},     // 0x57 - unofficial
-    (instruction){CLI, IMPLICIT, 2},        // 0x58
-    (instruction){XOR, ABSOLUTE_Y, 4},      // 0x59
-    (instruction){NOP, IMPLICIT, 2},        // 0x5a - unofficial
-    (instruction){SRE, ABSOLUTE_Y, 7},      // 0x5b - unofficial
-    (instruction){NOP, ABSOLUTE_X, 4},      // 0x5c - unofficial
-    (instruction){XOR, ABSOLUTE_X, 4},      // 0x5d
-    (instruction){LSR, ABSOLUTE_X, 7},      // 0x5e
-    (instruction){SRE, ABSOLUTE_X, 7},      // 0x5f - unofficial
+    (instruction){CPU_OPCODE_BVC, CPU_ADDR_RELATIVE, 2},        // 0x50
+    (instruction){CPU_OPCODE_XOR, CPU_ADDR_INDIRECT_Y, 5},      // 0x51
+    (instruction){CPU_OPCODE_STP, CPU_ADDR_IMPLICIT, 2},        // 0x52
+    (instruction){CPU_OPCODE_SRE, CPU_ADDR_INDIRECT_Y, 8},      // 0x53 - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ZERO_PAGE_X, 4},     // 0x54 - unofficial
+    (instruction){CPU_OPCODE_XOR, CPU_ADDR_ZERO_PAGE_X, 4},     // 0x55
+    (instruction){CPU_OPCODE_LSR, CPU_ADDR_ZERO_PAGE_X, 6},     // 0x56
+    (instruction){CPU_OPCODE_SRE, CPU_ADDR_ZERO_PAGE_X, 6},     // 0x57 - unofficial
+    (instruction){CPU_OPCODE_CLI, CPU_ADDR_IMPLICIT, 2},        // 0x58
+    (instruction){CPU_OPCODE_XOR, CPU_ADDR_ABSOLUTE_Y, 4},      // 0x59
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_IMPLICIT, 2},        // 0x5a - unofficial
+    (instruction){CPU_OPCODE_SRE, CPU_ADDR_ABSOLUTE_Y, 7},      // 0x5b - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ABSOLUTE_X, 4},      // 0x5c - unofficial
+    (instruction){CPU_OPCODE_XOR, CPU_ADDR_ABSOLUTE_X, 4},      // 0x5d
+    (instruction){CPU_OPCODE_LSR, CPU_ADDR_ABSOLUTE_X, 7},      // 0x5e
+    (instruction){CPU_OPCODE_SRE, CPU_ADDR_ABSOLUTE_X, 7},      // 0x5f - unofficial
 
-    (instruction){RTS, IMPLICIT, 6},        // 0x60
-    (instruction){ADC, INDIRECT_X, 6},      // 0x61
-    (instruction){STP, IMPLICIT, 2},        // 0x62
-    (instruction){RRA, INDIRECT_X, 8},      // 0x63 - unofficial
-    (instruction){NOP, ZERO_PAGE, 3},       // 0x64 - unofficial
-    (instruction){ADC, ZERO_PAGE, 3},       // 0x65
-    (instruction){ROR, ZERO_PAGE, 5},       // 0x66
-    (instruction){RRA, ZERO_PAGE, 5},       // 0x67 - unofficial
-    (instruction){PLA, IMPLICIT, 4},        // 0x68
-    (instruction){ADC, IMMEDIATE, 2},       // 0x69
-    (instruction){ROR, ACCUMULATOR, 2},     // 0x6a
-    (instruction){ARR, IMMEDIATE, 2},       // 0x6b - unofficial
-    (instruction){JMP, INDIRECT, 5},        // 0x6c
-    (instruction){ADC, ABSOLUTE, 4},        // 0x6d
-    (instruction){ROR, ABSOLUTE, 6},        // 0x6e
-    (instruction){RRA, ABSOLUTE, 6},        // 0x6f - unofficial
+    (instruction){CPU_OPCODE_RTS, CPU_ADDR_IMPLICIT, 6},        // 0x60
+    (instruction){CPU_OPCODE_ADC, CPU_ADDR_INDIRECT_X, 6},      // 0x61
+    (instruction){CPU_OPCODE_STP, CPU_ADDR_IMPLICIT, 2},        // 0x62
+    (instruction){CPU_OPCODE_RRA, CPU_ADDR_INDIRECT_X, 8},      // 0x63 - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ZERO_PAGE, 3},       // 0x64 - unofficial
+    (instruction){CPU_OPCODE_ADC, CPU_ADDR_ZERO_PAGE, 3},       // 0x65
+    (instruction){CPU_OPCODE_ROR, CPU_ADDR_ZERO_PAGE, 5},       // 0x66
+    (instruction){CPU_OPCODE_RRA, CPU_ADDR_ZERO_PAGE, 5},       // 0x67 - unofficial
+    (instruction){CPU_OPCODE_PLA, CPU_ADDR_IMPLICIT, 4},        // 0x68
+    (instruction){CPU_OPCODE_ADC, CPU_ADDR_IMMEDIATE, 2},       // 0x69
+    (instruction){CPU_OPCODE_ROR, CPU_ADDR_ACCUMULATOR, 2},     // 0x6a
+    (instruction){CPU_OPCODE_ARR, CPU_ADDR_IMMEDIATE, 2},       // 0x6b - unofficial
+    (instruction){CPU_OPCODE_JMP, CPU_ADDR_INDIRECT, 5},        // 0x6c
+    (instruction){CPU_OPCODE_ADC, CPU_ADDR_ABSOLUTE, 4},        // 0x6d
+    (instruction){CPU_OPCODE_ROR, CPU_ADDR_ABSOLUTE, 6},        // 0x6e
+    (instruction){CPU_OPCODE_RRA, CPU_ADDR_ABSOLUTE, 6},        // 0x6f - unofficial
 
-    (instruction){BVS, RELATIVE, 2},        // 0x70
-    (instruction){ADC, INDIRECT_Y, 5},      // 0x71
-    (instruction){STP, IMPLICIT, 2},        // 0x72
-    (instruction){RRA, INDIRECT_Y, 8},      // 0x73 - unofficial
-    (instruction){NOP, ZERO_PAGE_X, 4},     // 0x74 - unofficial
-    (instruction){ADC, ZERO_PAGE_X, 4},     // 0x75
-    (instruction){ROR, ZERO_PAGE_X, 6},     // 0x76
-    (instruction){RRA, ZERO_PAGE_X, 6},     // 0x77 - unofficial
-    (instruction){SEI, IMPLICIT, 2},        // 0x78
-    (instruction){ADC, ABSOLUTE_Y, 4},      // 0x79
-    (instruction){NOP, IMPLICIT, 2},        // 0x7a - unofficial
-    (instruction){RRA, ABSOLUTE_Y, 7},      // 0x7b - unofficial
-    (instruction){NOP, ABSOLUTE_X, 4},      // 0x7c - unofficial
-    (instruction){ADC, ABSOLUTE_X, 4},      // 0x7d
-    (instruction){ROR, ABSOLUTE_X, 7},      // 0x7e
-    (instruction){RRA, ABSOLUTE_X, 7},      // 0x7f - unofficial
+    (instruction){CPU_OPCODE_BVS, CPU_ADDR_RELATIVE, 2},        // 0x70
+    (instruction){CPU_OPCODE_ADC, CPU_ADDR_INDIRECT_Y, 5},      // 0x71
+    (instruction){CPU_OPCODE_STP, CPU_ADDR_IMPLICIT, 2},        // 0x72
+    (instruction){CPU_OPCODE_RRA, CPU_ADDR_INDIRECT_Y, 8},      // 0x73 - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ZERO_PAGE_X, 4},     // 0x74 - unofficial
+    (instruction){CPU_OPCODE_ADC, CPU_ADDR_ZERO_PAGE_X, 4},     // 0x75
+    (instruction){CPU_OPCODE_ROR, CPU_ADDR_ZERO_PAGE_X, 6},     // 0x76
+    (instruction){CPU_OPCODE_RRA, CPU_ADDR_ZERO_PAGE_X, 6},     // 0x77 - unofficial
+    (instruction){CPU_OPCODE_SEI, CPU_ADDR_IMPLICIT, 2},        // 0x78
+    (instruction){CPU_OPCODE_ADC, CPU_ADDR_ABSOLUTE_Y, 4},      // 0x79
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_IMPLICIT, 2},        // 0x7a - unofficial
+    (instruction){CPU_OPCODE_RRA, CPU_ADDR_ABSOLUTE_Y, 7},      // 0x7b - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ABSOLUTE_X, 4},      // 0x7c - unofficial
+    (instruction){CPU_OPCODE_ADC, CPU_ADDR_ABSOLUTE_X, 4},      // 0x7d
+    (instruction){CPU_OPCODE_ROR, CPU_ADDR_ABSOLUTE_X, 7},      // 0x7e
+    (instruction){CPU_OPCODE_RRA, CPU_ADDR_ABSOLUTE_X, 7},      // 0x7f - unofficial
 
-    (instruction){NOP, IMMEDIATE, 2},       // 0x80 - unofficial
-    (instruction){STA, INDIRECT_X, 6},      // 0x81
-    (instruction){NOP, IMMEDIATE, 2},       // 0x82 - unofficial
-    (instruction){SAX, INDIRECT_X, 6},      // 0x83 - unofficial
-    (instruction){STY, ZERO_PAGE, 3},       // 0x84
-    (instruction){STA, ZERO_PAGE, 3},       // 0x85
-    (instruction){STX, ZERO_PAGE, 3},       // 0x86
-    (instruction){SAX, ZERO_PAGE, 3},       // 0x87 - unofficial
-    (instruction){DEY, IMPLICIT, 2},        // 0x88
-    (instruction){NOP, IMMEDIATE, 2},       // 0x89 - unofficial
-    (instruction){TXA, IMPLICIT, 2},        // 0x8a
-    (instruction){XAA, IMPLICIT, 2},        // 0x8b
-    (instruction){STY, ABSOLUTE, 4},        // 0x8c
-    (instruction){STA, ABSOLUTE, 4},        // 0x8d
-    (instruction){STX, ABSOLUTE, 4},        // 0x8e
-    (instruction){SAX, ABSOLUTE, 4},        // 0x8f - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_IMMEDIATE, 2},       // 0x80 - unofficial
+    (instruction){CPU_OPCODE_STA, CPU_ADDR_INDIRECT_X, 6},      // 0x81
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_IMMEDIATE, 2},       // 0x82 - unofficial
+    (instruction){CPU_OPCODE_SAX, CPU_ADDR_INDIRECT_X, 6},      // 0x83 - unofficial
+    (instruction){CPU_OPCODE_STY, CPU_ADDR_ZERO_PAGE, 3},       // 0x84
+    (instruction){CPU_OPCODE_STA, CPU_ADDR_ZERO_PAGE, 3},       // 0x85
+    (instruction){CPU_OPCODE_STX, CPU_ADDR_ZERO_PAGE, 3},       // 0x86
+    (instruction){CPU_OPCODE_SAX, CPU_ADDR_ZERO_PAGE, 3},       // 0x87 - unofficial
+    (instruction){CPU_OPCODE_DEY, CPU_ADDR_IMPLICIT, 2},        // 0x88
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_IMMEDIATE, 2},       // 0x89 - unofficial
+    (instruction){CPU_OPCODE_TXA, CPU_ADDR_IMPLICIT, 2},        // 0x8a
+    (instruction){CPU_OPCODE_XAA, CPU_ADDR_IMPLICIT, 2},        // 0x8b
+    (instruction){CPU_OPCODE_STY, CPU_ADDR_ABSOLUTE, 4},        // 0x8c
+    (instruction){CPU_OPCODE_STA, CPU_ADDR_ABSOLUTE, 4},        // 0x8d
+    (instruction){CPU_OPCODE_STX, CPU_ADDR_ABSOLUTE, 4},        // 0x8e
+    (instruction){CPU_OPCODE_SAX, CPU_ADDR_ABSOLUTE, 4},        // 0x8f - unofficial
 
-    (instruction){BCC, RELATIVE, 2},        // 0x90
-    (instruction){STA, INDIRECT_Y, 6},      // 0x91
-    (instruction){STP, IMPLICIT, 2},        // 0x92
-    (instruction){AHX, IMPLICIT, 6},        // 0x93
-    (instruction){STY, ZERO_PAGE_X, 4},     // 0x94
-    (instruction){STA, ZERO_PAGE_X, 4},     // 0x95
-    (instruction){STX, ZERO_PAGE_Y, 4},     // 0x96
-    (instruction){SAX, ZERO_PAGE_Y, 4},     // 0x97 - unofficial
-    (instruction){TYA, IMPLICIT, 2},        // 0x98
-    (instruction){STA, ABSOLUTE_Y, 5},      // 0x99
-    (instruction){TXS, IMPLICIT, 2},        // 0x9a
-    (instruction){TAS, IMPLICIT, 5},        // 0x9b
-    (instruction){SHY, IMPLICIT, 5},        // 0x9c
-    (instruction){STA, ABSOLUTE_X, 5},      // 0x9d
-    (instruction){SHX, IMPLICIT, 5},        // 0x9e
-    (instruction){AHX, IMPLICIT, 5},        // 0x9f
+    (instruction){CPU_OPCODE_BCC, CPU_ADDR_RELATIVE, 2},        // 0x90
+    (instruction){CPU_OPCODE_STA, CPU_ADDR_INDIRECT_Y, 6},      // 0x91
+    (instruction){CPU_OPCODE_STP, CPU_ADDR_IMPLICIT, 2},        // 0x92
+    (instruction){CPU_OPCODE_AHX, CPU_ADDR_IMPLICIT, 6},        // 0x93
+    (instruction){CPU_OPCODE_STY, CPU_ADDR_ZERO_PAGE_X, 4},     // 0x94
+    (instruction){CPU_OPCODE_STA, CPU_ADDR_ZERO_PAGE_X, 4},     // 0x95
+    (instruction){CPU_OPCODE_STX, CPU_ADDR_ZERO_PAGE_Y, 4},     // 0x96
+    (instruction){CPU_OPCODE_SAX, CPU_ADDR_ZERO_PAGE_Y, 4},     // 0x97 - unofficial
+    (instruction){CPU_OPCODE_TYA, CPU_ADDR_IMPLICIT, 2},        // 0x98
+    (instruction){CPU_OPCODE_STA, CPU_ADDR_ABSOLUTE_Y, 5},      // 0x99
+    (instruction){CPU_OPCODE_TXS, CPU_ADDR_IMPLICIT, 2},        // 0x9a
+    (instruction){CPU_OPCODE_TAS, CPU_ADDR_IMPLICIT, 5},        // 0x9b
+    (instruction){CPU_OPCODE_SHY, CPU_ADDR_IMPLICIT, 5},        // 0x9c
+    (instruction){CPU_OPCODE_STA, CPU_ADDR_ABSOLUTE_X, 5},      // 0x9d
+    (instruction){CPU_OPCODE_SHX, CPU_ADDR_IMPLICIT, 5},        // 0x9e
+    (instruction){CPU_OPCODE_AHX, CPU_ADDR_IMPLICIT, 5},        // 0x9f
 
-    (instruction){LDY, IMMEDIATE, 2},       // 0xa0
-    (instruction){LDA, INDIRECT_X, 6},      // 0xa1
-    (instruction){LDX, IMMEDIATE, 2},       // 0xa2
-    (instruction){LAX, INDIRECT_X, 6},      // 0xa3 - unofficial
-    (instruction){LDY, ZERO_PAGE, 3},       // 0xa4
-    (instruction){LDA, ZERO_PAGE, 3},       // 0xa5
-    (instruction){LDX, ZERO_PAGE, 3},       // 0xa6
-    (instruction){LAX, ZERO_PAGE, 3},       // 0xa7 - unofficial
-    (instruction){TAY, IMPLICIT, 2},        // 0xa8
-    (instruction){LDA, IMMEDIATE, 2},       // 0xa9
-    (instruction){TAX, IMPLICIT, 2},        // 0xaa
-    (instruction){LAX, IMPLICIT, 2},        // 0xab
-    (instruction){LDY, ABSOLUTE, 4},        // 0xac
-    (instruction){LDA, ABSOLUTE, 4},        // 0xad
-    (instruction){LDX, ABSOLUTE, 4},        // 0xae
-    (instruction){LAX, ABSOLUTE, 4},        // 0xaf - unofficial
+    (instruction){CPU_OPCODE_LDY, CPU_ADDR_IMMEDIATE, 2},       // 0xa0
+    (instruction){CPU_OPCODE_LDA, CPU_ADDR_INDIRECT_X, 6},      // 0xa1
+    (instruction){CPU_OPCODE_LDX, CPU_ADDR_IMMEDIATE, 2},       // 0xa2
+    (instruction){CPU_OPCODE_LAX, CPU_ADDR_INDIRECT_X, 6},      // 0xa3 - unofficial
+    (instruction){CPU_OPCODE_LDY, CPU_ADDR_ZERO_PAGE, 3},       // 0xa4
+    (instruction){CPU_OPCODE_LDA, CPU_ADDR_ZERO_PAGE, 3},       // 0xa5
+    (instruction){CPU_OPCODE_LDX, CPU_ADDR_ZERO_PAGE, 3},       // 0xa6
+    (instruction){CPU_OPCODE_LAX, CPU_ADDR_ZERO_PAGE, 3},       // 0xa7 - unofficial
+    (instruction){CPU_OPCODE_TAY, CPU_ADDR_IMPLICIT, 2},        // 0xa8
+    (instruction){CPU_OPCODE_LDA, CPU_ADDR_IMMEDIATE, 2},       // 0xa9
+    (instruction){CPU_OPCODE_TAX, CPU_ADDR_IMPLICIT, 2},        // 0xaa
+    (instruction){CPU_OPCODE_LAX, CPU_ADDR_IMPLICIT, 2},        // 0xab
+    (instruction){CPU_OPCODE_LDY, CPU_ADDR_ABSOLUTE, 4},        // 0xac
+    (instruction){CPU_OPCODE_LDA, CPU_ADDR_ABSOLUTE, 4},        // 0xad
+    (instruction){CPU_OPCODE_LDX, CPU_ADDR_ABSOLUTE, 4},        // 0xae
+    (instruction){CPU_OPCODE_LAX, CPU_ADDR_ABSOLUTE, 4},        // 0xaf - unofficial
 
-    (instruction){BCS, RELATIVE, 2},        // 0xb0
-    (instruction){LDA, INDIRECT_Y, 5},      // 0xb1
-    (instruction){STP, IMPLICIT, 2},        // 0xb2
-    (instruction){LAX, INDIRECT_Y, 5},      // 0xb3 - unofficial
-    (instruction){LDY, ZERO_PAGE_X, 4},     // 0xb4
-    (instruction){LDA, ZERO_PAGE_X, 4},     // 0xb5
-    (instruction){LDX, ZERO_PAGE_Y, 4},     // 0xb6
-    (instruction){LAX, ZERO_PAGE_Y, 4},     // 0xb7 - unofficial
-    (instruction){CLV, IMPLICIT, 2},        // 0xb8
-    (instruction){LDA, ABSOLUTE_Y, 4},      // 0xb9
-    (instruction){TSX, IMPLICIT, 2},        // 0xba
-    (instruction){LAS, IMPLICIT, 4},        // 0xbb
-    (instruction){LDY, ABSOLUTE_X, 4},      // 0xbc
-    (instruction){LDA, ABSOLUTE_X, 4},      // 0xbd
-    (instruction){LDX, ABSOLUTE_Y, 4},      // 0xbe
-    (instruction){LAX, ABSOLUTE_Y, 4},      // 0xbf - unofficial
+    (instruction){CPU_OPCODE_BCS, CPU_ADDR_RELATIVE, 2},        // 0xb0
+    (instruction){CPU_OPCODE_LDA, CPU_ADDR_INDIRECT_Y, 5},      // 0xb1
+    (instruction){CPU_OPCODE_STP, CPU_ADDR_IMPLICIT, 2},        // 0xb2
+    (instruction){CPU_OPCODE_LAX, CPU_ADDR_INDIRECT_Y, 5},      // 0xb3 - unofficial
+    (instruction){CPU_OPCODE_LDY, CPU_ADDR_ZERO_PAGE_X, 4},     // 0xb4
+    (instruction){CPU_OPCODE_LDA, CPU_ADDR_ZERO_PAGE_X, 4},     // 0xb5
+    (instruction){CPU_OPCODE_LDX, CPU_ADDR_ZERO_PAGE_Y, 4},     // 0xb6
+    (instruction){CPU_OPCODE_LAX, CPU_ADDR_ZERO_PAGE_Y, 4},     // 0xb7 - unofficial
+    (instruction){CPU_OPCODE_CLV, CPU_ADDR_IMPLICIT, 2},        // 0xb8
+    (instruction){CPU_OPCODE_LDA, CPU_ADDR_ABSOLUTE_Y, 4},      // 0xb9
+    (instruction){CPU_OPCODE_TSX, CPU_ADDR_IMPLICIT, 2},        // 0xba
+    (instruction){CPU_OPCODE_LAS, CPU_ADDR_IMPLICIT, 4},        // 0xbb
+    (instruction){CPU_OPCODE_LDY, CPU_ADDR_ABSOLUTE_X, 4},      // 0xbc
+    (instruction){CPU_OPCODE_LDA, CPU_ADDR_ABSOLUTE_X, 4},      // 0xbd
+    (instruction){CPU_OPCODE_LDX, CPU_ADDR_ABSOLUTE_Y, 4},      // 0xbe
+    (instruction){CPU_OPCODE_LAX, CPU_ADDR_ABSOLUTE_Y, 4},      // 0xbf - unofficial
 
-    (instruction){CPY, IMMEDIATE, 2},       // 0xc0
-    (instruction){CMP, INDIRECT_X, 6},      // 0xc1
-    (instruction){NOP, IMMEDIATE, 2},       // 0xc2 - unofficial
-    (instruction){DCP, INDIRECT_X, 8},      // 0xc3 - unofficial
-    (instruction){CPY, ZERO_PAGE, 3},       // 0xc4
-    (instruction){CMP, ZERO_PAGE, 3},       // 0xc5
-    (instruction){DEC, ZERO_PAGE, 5},       // 0xc6
-    (instruction){DCP, ZERO_PAGE, 5},       // 0xc7 - unofficial
-    (instruction){INY, IMPLICIT, 2},        // 0xc8
-    (instruction){CMP, IMMEDIATE, 2},       // 0xc9
-    (instruction){DEX, IMPLICIT, 2},        // 0xca
-    (instruction){AXS, IMMEDIATE, 2},       // 0xcb - unofficial
-    (instruction){CPY, ABSOLUTE, 4},        // 0xcc
-    (instruction){CMP, ABSOLUTE, 4},        // 0xcd
-    (instruction){DEC, ABSOLUTE, 6},        // 0xce
-    (instruction){DCP, ABSOLUTE, 6},        // 0xcf - unofficial
+    (instruction){CPU_OPCODE_CPY, CPU_ADDR_IMMEDIATE, 2},       // 0xc0
+    (instruction){CPU_OPCODE_CMP, CPU_ADDR_INDIRECT_X, 6},      // 0xc1
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_IMMEDIATE, 2},       // 0xc2 - unofficial
+    (instruction){CPU_OPCODE_DCP, CPU_ADDR_INDIRECT_X, 8},      // 0xc3 - unofficial
+    (instruction){CPU_OPCODE_CPY, CPU_ADDR_ZERO_PAGE, 3},       // 0xc4
+    (instruction){CPU_OPCODE_CMP, CPU_ADDR_ZERO_PAGE, 3},       // 0xc5
+    (instruction){CPU_OPCODE_DEC, CPU_ADDR_ZERO_PAGE, 5},       // 0xc6
+    (instruction){CPU_OPCODE_DCP, CPU_ADDR_ZERO_PAGE, 5},       // 0xc7 - unofficial
+    (instruction){CPU_OPCODE_INY, CPU_ADDR_IMPLICIT, 2},        // 0xc8
+    (instruction){CPU_OPCODE_CMP, CPU_ADDR_IMMEDIATE, 2},       // 0xc9
+    (instruction){CPU_OPCODE_DEX, CPU_ADDR_IMPLICIT, 2},        // 0xca
+    (instruction){CPU_OPCODE_AXS, CPU_ADDR_IMMEDIATE, 2},       // 0xcb - unofficial
+    (instruction){CPU_OPCODE_CPY, CPU_ADDR_ABSOLUTE, 4},        // 0xcc
+    (instruction){CPU_OPCODE_CMP, CPU_ADDR_ABSOLUTE, 4},        // 0xcd
+    (instruction){CPU_OPCODE_DEC, CPU_ADDR_ABSOLUTE, 6},        // 0xce
+    (instruction){CPU_OPCODE_DCP, CPU_ADDR_ABSOLUTE, 6},        // 0xcf - unofficial
 
-    (instruction){BNE, RELATIVE, 2},        // 0xd0
-    (instruction){CMP, INDIRECT_Y, 5},      // 0xd1
-    (instruction){STP, IMPLICIT, 2},        // 0xd2
-    (instruction){DCP, INDIRECT_Y, 8},      // 0xd3 - unofficial
-    (instruction){NOP, ZERO_PAGE_X, 4},     // 0xd4 - unofficial
-    (instruction){CMP, ZERO_PAGE_X, 4},     // 0xd5
-    (instruction){DEC, ZERO_PAGE_X, 6},     // 0xd6
-    (instruction){DCP, ZERO_PAGE_X, 6},     // 0xd7 - unofficial
-    (instruction){CLD, IMPLICIT, 2},        // 0xd8
-    (instruction){CMP, ABSOLUTE_Y, 4},      // 0xd9
-    (instruction){NOP, IMPLICIT, 2},        // 0xda - unofficial
-    (instruction){DCP, ABSOLUTE_Y, 7},      // 0xdb - unofficial
-    (instruction){NOP, ABSOLUTE_X, 4},      // 0xdc - unofficial
-    (instruction){CMP, ABSOLUTE_X, 4},      // 0xdd
-    (instruction){DEC, ABSOLUTE_X, 7},      // 0xde
-    (instruction){DCP, ABSOLUTE_X, 7},      // 0xdf - unofficial
+    (instruction){CPU_OPCODE_BNE, CPU_ADDR_RELATIVE, 2},        // 0xd0
+    (instruction){CPU_OPCODE_CMP, CPU_ADDR_INDIRECT_Y, 5},      // 0xd1
+    (instruction){CPU_OPCODE_STP, CPU_ADDR_IMPLICIT, 2},        // 0xd2
+    (instruction){CPU_OPCODE_DCP, CPU_ADDR_INDIRECT_Y, 8},      // 0xd3 - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ZERO_PAGE_X, 4},     // 0xd4 - unofficial
+    (instruction){CPU_OPCODE_CMP, CPU_ADDR_ZERO_PAGE_X, 4},     // 0xd5
+    (instruction){CPU_OPCODE_DEC, CPU_ADDR_ZERO_PAGE_X, 6},     // 0xd6
+    (instruction){CPU_OPCODE_DCP, CPU_ADDR_ZERO_PAGE_X, 6},     // 0xd7 - unofficial
+    (instruction){CPU_OPCODE_CLD, CPU_ADDR_IMPLICIT, 2},        // 0xd8
+    (instruction){CPU_OPCODE_CMP, CPU_ADDR_ABSOLUTE_Y, 4},      // 0xd9
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_IMPLICIT, 2},        // 0xda - unofficial
+    (instruction){CPU_OPCODE_DCP, CPU_ADDR_ABSOLUTE_Y, 7},      // 0xdb - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ABSOLUTE_X, 4},      // 0xdc - unofficial
+    (instruction){CPU_OPCODE_CMP, CPU_ADDR_ABSOLUTE_X, 4},      // 0xdd
+    (instruction){CPU_OPCODE_DEC, CPU_ADDR_ABSOLUTE_X, 7},      // 0xde
+    (instruction){CPU_OPCODE_DCP, CPU_ADDR_ABSOLUTE_X, 7},      // 0xdf - unofficial
 
-    (instruction){CPX, IMMEDIATE, 2},       // 0xe0
-    (instruction){SBC, INDIRECT_X, 6},      // 0xe1
-    (instruction){NOP, IMMEDIATE, 2},       // 0xe2 - unofficial
-    (instruction){ISC, INDIRECT_X, 8},      // 0xe3 - unofficial
-    (instruction){CPX, ZERO_PAGE, 3},       // 0xe4
-    (instruction){SBC, ZERO_PAGE, 3},       // 0xe5
-    (instruction){INC, ZERO_PAGE, 5},       // 0xe6
-    (instruction){ISC, ZERO_PAGE, 5},       // 0xe7 - unofficial
-    (instruction){INX, IMPLICIT, 2},        // 0xe8
-    (instruction){SBC, IMMEDIATE, 2},       // 0xe9
-    (instruction){NOP, IMPLICIT, 2},        // 0xea
-    (instruction){SBC, IMMEDIATE, 2},       // 0xeb - unofficial
-    (instruction){CPX, ABSOLUTE, 4},        // 0xec
-    (instruction){SBC, ABSOLUTE, 4},        // 0xed
-    (instruction){INC, ABSOLUTE, 6},        // 0xee
-    (instruction){ISC, ABSOLUTE, 6},        // 0xef - unofficial
+    (instruction){CPU_OPCODE_CPX, CPU_ADDR_IMMEDIATE, 2},       // 0xe0
+    (instruction){CPU_OPCODE_SBC, CPU_ADDR_INDIRECT_X, 6},      // 0xe1
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_IMMEDIATE, 2},       // 0xe2 - unofficial
+    (instruction){CPU_OPCODE_ISC, CPU_ADDR_INDIRECT_X, 8},      // 0xe3 - unofficial
+    (instruction){CPU_OPCODE_CPX, CPU_ADDR_ZERO_PAGE, 3},       // 0xe4
+    (instruction){CPU_OPCODE_SBC, CPU_ADDR_ZERO_PAGE, 3},       // 0xe5
+    (instruction){CPU_OPCODE_INC, CPU_ADDR_ZERO_PAGE, 5},       // 0xe6
+    (instruction){CPU_OPCODE_ISC, CPU_ADDR_ZERO_PAGE, 5},       // 0xe7 - unofficial
+    (instruction){CPU_OPCODE_INX, CPU_ADDR_IMPLICIT, 2},        // 0xe8
+    (instruction){CPU_OPCODE_SBC, CPU_ADDR_IMMEDIATE, 2},       // 0xe9
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_IMPLICIT, 2},        // 0xea
+    (instruction){CPU_OPCODE_SBC, CPU_ADDR_IMMEDIATE, 2},       // 0xeb - unofficial
+    (instruction){CPU_OPCODE_CPX, CPU_ADDR_ABSOLUTE, 4},        // 0xec
+    (instruction){CPU_OPCODE_SBC, CPU_ADDR_ABSOLUTE, 4},        // 0xed
+    (instruction){CPU_OPCODE_INC, CPU_ADDR_ABSOLUTE, 6},        // 0xee
+    (instruction){CPU_OPCODE_ISC, CPU_ADDR_ABSOLUTE, 6},        // 0xef - unofficial
 
-    (instruction){BEQ, RELATIVE, 2},        // 0xf0
-    (instruction){SBC, INDIRECT_Y, 5},      // 0xf1
-    (instruction){STP, IMPLICIT, 2},        // 0xf2
-    (instruction){ISC, INDIRECT_Y, 8},      // 0xf3 - unofficial
-    (instruction){NOP, ZERO_PAGE_X, 4},     // 0xf4 - unofficial
-    (instruction){SBC, ZERO_PAGE_X, 4},     // 0xf5
-    (instruction){INC, ZERO_PAGE_X, 6},     // 0xf6
-    (instruction){ISC, ZERO_PAGE_X, 6},     // 0xf7 - unofficial
-    (instruction){SED, IMPLICIT, 2},        // 0xf8
-    (instruction){SBC, ABSOLUTE_Y, 4},      // 0xf9
-    (instruction){NOP, IMPLICIT, 2},        // 0xfa - unofficial
-    (instruction){ISC, ABSOLUTE_Y, 7},      // 0xfb - unofficial
-    (instruction){NOP, ABSOLUTE_X, 4},      // 0xfc - unofficial
-    (instruction){SBC, ABSOLUTE_X, 4},      // 0xfd
-    (instruction){INC, ABSOLUTE_X, 7},      // 0xfe
-    (instruction){ISC, ABSOLUTE_X, 7}       // 0xff - unofficial
+    (instruction){CPU_OPCODE_BEQ, CPU_ADDR_RELATIVE, 2},        // 0xf0
+    (instruction){CPU_OPCODE_SBC, CPU_ADDR_INDIRECT_Y, 5},      // 0xf1
+    (instruction){CPU_OPCODE_STP, CPU_ADDR_IMPLICIT, 2},        // 0xf2
+    (instruction){CPU_OPCODE_ISC, CPU_ADDR_INDIRECT_Y, 8},      // 0xf3 - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ZERO_PAGE_X, 4},     // 0xf4 - unofficial
+    (instruction){CPU_OPCODE_SBC, CPU_ADDR_ZERO_PAGE_X, 4},     // 0xf5
+    (instruction){CPU_OPCODE_INC, CPU_ADDR_ZERO_PAGE_X, 6},     // 0xf6
+    (instruction){CPU_OPCODE_ISC, CPU_ADDR_ZERO_PAGE_X, 6},     // 0xf7 - unofficial
+    (instruction){CPU_OPCODE_SED, CPU_ADDR_IMPLICIT, 2},        // 0xf8
+    (instruction){CPU_OPCODE_SBC, CPU_ADDR_ABSOLUTE_Y, 4},      // 0xf9
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_IMPLICIT, 2},        // 0xfa - unofficial
+    (instruction){CPU_OPCODE_ISC, CPU_ADDR_ABSOLUTE_Y, 7},      // 0xfb - unofficial
+    (instruction){CPU_OPCODE_NOP, CPU_ADDR_ABSOLUTE_X, 4},      // 0xfc - unofficial
+    (instruction){CPU_OPCODE_SBC, CPU_ADDR_ABSOLUTE_X, 4},      // 0xfd
+    (instruction){CPU_OPCODE_INC, CPU_ADDR_ABSOLUTE_X, 7},      // 0xfe
+    (instruction){CPU_OPCODE_ISC, CPU_ADDR_ABSOLUTE_X, 7}       // 0xff - unofficial
 };
 
 //Returns the value of the byte at pc and increments pc
@@ -354,10 +354,10 @@ uint16_t get_addr(cpu *c) {
 
 //Runs an interrupt IRQ
 void interrupt_irq(cpu *c) {
-    if(get_cpu_flag(c, INTERRUPT_DISABLE)) return;
+    if(get_cpu_flag(c, CPU_INTERRUPT_DISABLE)) return;
     push_pc(c);
     push(c, (c->proc_stat_reg & ~(1 << 4) | (1 << 5)));
-    set_cpu_flag(c, INTERRUPT_DISABLE, 1);
+    set_cpu_flag(c, CPU_INTERRUPT_DISABLE, 1);
 
     set_pc(c, 0xFFFE);
     c->b->p->rom->irq_pending = 0; //Need to reset it to prevent repeat calls next frame
@@ -367,7 +367,7 @@ void interrupt_irq(cpu *c) {
 void interrupt_nmi(cpu *c) {
     push_pc(c);
     push(c, (c->proc_stat_reg & ~(1 << 4) | (1 << 5)));
-    set_cpu_flag(c, INTERRUPT_DISABLE, 1);
+    set_cpu_flag(c, CPU_INTERRUPT_DISABLE, 1);
 
     set_pc(c, 0xFFFA);
     c->b->p->nmi_triggered = 0; //Need to reset it to prevent repeat calls next frame
@@ -376,9 +376,9 @@ void interrupt_nmi(cpu *c) {
 //Sets the relevant flags that would occur from comparing two values
 //Helper for comparison functions such as CMP, CPY, CPX
 void compare(cpu *c, uint8_t v1, uint8_t v2) {
-    set_cpu_flag(c, CARRY, v1 >= v2);
-    set_cpu_flag(c, ZERO, v1 == v2);
-    set_cpu_flag(c, NEGATIVE, (v1 - v2) & 0x80);
+    set_cpu_flag(c, CPU_CARRY, v1 >= v2);
+    set_cpu_flag(c, CPU_ZERO, v1 == v2);
+    set_cpu_flag(c, CPU_NEGATIVE, (v1 - v2) & 0x80);
 }
 
 //Gets the argument for an instruction.
@@ -387,41 +387,41 @@ void compare(cpu *c, uint8_t v1, uint8_t v2) {
 uint16_t get_argument(cpu *c, address_mode mode, uint8_t get_val, size_t *cycles) {
     uint16_t addr = 0;
     switch(mode) {
-        case ABSOLUTE:
+        case CPU_ADDR_ABSOLUTE:
             addr = get_addr(c);
             break;
-        case ABSOLUTE_X:
+        case CPU_ADDR_ABSOLUTE_X:
             addr = get_addr(c);
             if((*cycles) == 4) {
                 if((addr & 0xFF00) != ((addr + c->x) & 0xFF00)) (*cycles)++;
             }
             addr += c->x;
             break;
-        case ABSOLUTE_Y:
+        case CPU_ADDR_ABSOLUTE_Y:
             addr = get_addr(c);
             if((*cycles) == 4) {
                 if((addr & 0xFF00) != ((addr + c->y) & 0xFF00)) (*cycles)++;
             }
             addr += c->y;
             break;
-        case ACCUMULATOR: //Should not do anything and be explictly handled by the case in question
+        case CPU_ADDR_ACCUMULATOR: //Should not do anything and be explictly handled by the case in question
             break;
-        case IMMEDIATE:
+        case CPU_ADDR_IMMEDIATE:
             return fetch_byte(c);
-        case IMPLICIT: //Only used by BRK
+        case CPU_ADDR_IMPLICIT: //Only used by BRK
             break;
-        case INDIRECT: {
+        case CPU_ADDR_INDIRECT: {
             uint16_t ptr = get_addr(c);
             uint8_t lo = mem_read(c->b, ptr);
             uint8_t hi = mem_read(c->b, (ptr & 0xFF00) | ((ptr + 1) & 0x00FF)); //wrap within page
             addr = (((uint16_t)hi) << 8) | lo;
         }
             break;
-        case INDIRECT_X:
+        case CPU_ADDR_INDIRECT_X:
             addr = (fetch_byte(c) + c ->x) % 256;
             addr = (((uint16_t)mem_read(c->b, (addr+1)%256)) << 8) | mem_read(c->b, addr);
             break;
-        case INDIRECT_Y:
+        case CPU_ADDR_INDIRECT_Y:
             addr = fetch_byte(c);
             addr = (((uint16_t)mem_read(c->b, (addr+1)%256)) << 8) | mem_read(c->b, addr);
             if((*cycles) == 5) {
@@ -429,15 +429,15 @@ uint16_t get_argument(cpu *c, address_mode mode, uint8_t get_val, size_t *cycles
             }
             addr += c->y;
             break;
-        case RELATIVE: //Don't bother as this should be handled by the branch function defined earlier
+        case CPU_ADDR_RELATIVE: //Don't bother as this should be handled by the branch function defined earlier
             break;
-        case ZERO_PAGE:
+        case CPU_ADDR_ZERO_PAGE:
             addr = fetch_byte(c);
             break;
-        case ZERO_PAGE_X:
+        case CPU_ADDR_ZERO_PAGE_X:
             addr = (fetch_byte(c)+ c->x) % 256;
             break;
-        case ZERO_PAGE_Y:
+        case CPU_ADDR_ZERO_PAGE_Y:
             addr = (fetch_byte(c) + c->y) % 256;
             break;
     }
@@ -453,310 +453,310 @@ size_t execute_instr(cpu *c) {
 
     switch(instr.instr) {
         //Loads value from memory address into accumulator
-        case LDA:
+        case CPU_OPCODE_LDA:
             c->acc = get_argument(c, instr.addr_mode, 1, &cycles);
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->acc & 0x80));
             break;
         //Loads value from memory address into x register
-        case LDX:
+        case CPU_OPCODE_LDX:
             c->x = get_argument(c, instr.addr_mode, 1, &cycles);
-            set_cpu_flag(c, ZERO, c->x == 0);
-            set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->x == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->x & 0x80));
             break;
         //Loads value from memory address into y register
-        case LDY:
+        case CPU_OPCODE_LDY:
             c->y = get_argument(c, instr.addr_mode, 1, &cycles);
-            set_cpu_flag(c, ZERO, c->y == 0);
-            set_cpu_flag(c, NEGATIVE, (c->y & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->y == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->y & 0x80));
             break;
         //Stores the value in the accumulator at the given memory address
-        case STA:
+        case CPU_OPCODE_STA:
             mem_write(c->b, get_argument(c, instr.addr_mode, 0, &cycles), c->acc);
             break;
         //Stores the value in the x register at the given memory address
-        case STX:
+        case CPU_OPCODE_STX:
             // c->memory[get_argument(c, instr.addr_mode, 0)] = c->x;
             mem_write(c->b, get_argument(c, instr.addr_mode, 0, &cycles), c->x);
             break;
         //Stores the value in the y register at the given memory address
-        case STY:
+        case CPU_OPCODE_STY:
             // c->memory[get_argument(c, instr.addr_mode, 0)] = c->y;
             mem_write(c->b, get_argument(c, instr.addr_mode, 0, &cycles), c->y);
             break;
         //Transfers accumulator value into x register;
-        case TAX:
+        case CPU_OPCODE_TAX:
             c->x = c->acc;
-            set_cpu_flag(c, ZERO, c->x == 0);
-            set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->x == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->x & 0x80));
             break;
         //Transfers x register value into accumulator;
-        case TXA:
+        case CPU_OPCODE_TXA:
             c->acc = c->x;
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->acc & 0x80));
             break;
         //Transfers accumulator value into y register;
-        case TAY:
+        case CPU_OPCODE_TAY:
             c->y = c->acc;
-            set_cpu_flag(c, ZERO, c->y == 0);
-            set_cpu_flag(c, NEGATIVE, (c->y & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->y == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->y & 0x80));
             break;
         //Transfers x register value into accumulator;
-        case TYA:
+        case CPU_OPCODE_TYA:
             c->acc = c->y;
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->acc & 0x80));
             break;
         //Adds a memory value and the carry flag to the accumulator
         //Sets the carry flag if there is overflow
         //Sets the overflow flag if there is signed overflow (result has different sign from both memory value and accumulator)
-        case ADC: {
+        case CPU_OPCODE_ADC: {
             uint16_t param = get_argument(c, instr.addr_mode, 1, &cycles);
-            uint16_t sum = c->acc + param + get_cpu_flag(c, CARRY);
+            uint16_t sum = c->acc + param + get_cpu_flag(c, CPU_CARRY);
             uint8_t trunc_sum = (uint8_t)sum;
-            set_cpu_flag(c, CARRY, sum > 0xFF);
-            set_cpu_flag(c, ZERO, trunc_sum == 0);
-            set_cpu_flag(c, OVERFLOW, (c->acc ^ trunc_sum) & (trunc_sum ^ param) & 0x80);
-            set_cpu_flag(c, NEGATIVE,  trunc_sum & 0x80);
+            set_cpu_flag(c, CPU_CARRY, sum > 0xFF);
+            set_cpu_flag(c, CPU_ZERO, trunc_sum == 0);
+            set_cpu_flag(c, CPU_OVERFLOW, (c->acc ^ trunc_sum) & (trunc_sum ^ param) & 0x80);
+            set_cpu_flag(c, CPU_NEGATIVE,  trunc_sum & 0x80);
             c->acc = trunc_sum;
         }
         break;
         //Subtracts a memory value and the carry flag to the accumulator
         //Sets the carry flag if there is overflow
         //Sets the overflow flag if there is signed overflow (result has different sign from both memory value and accumulator)
-        case SBC: {
+        case CPU_OPCODE_SBC: {
             uint16_t param = get_argument(c, instr.addr_mode, 1, &cycles);
-            uint16_t sum = c->acc - param - !get_cpu_flag(c, CARRY);
+            uint16_t sum = c->acc - param - !get_cpu_flag(c, CPU_CARRY);
             uint8_t trunc_sum = (uint8_t)sum;
-            set_cpu_flag(c, CARRY, !(sum > 0xFF));
-            set_cpu_flag(c, ZERO, trunc_sum == 0);
-            set_cpu_flag(c, OVERFLOW, (c->acc ^ trunc_sum) & (trunc_sum ^ ~param) & 0x80);
-            set_cpu_flag(c, NEGATIVE,  trunc_sum & 0x80);
+            set_cpu_flag(c, CPU_CARRY, !(sum > 0xFF));
+            set_cpu_flag(c, CPU_ZERO, trunc_sum == 0);
+            set_cpu_flag(c, CPU_OVERFLOW, (c->acc ^ trunc_sum) & (trunc_sum ^ ~param) & 0x80);
+            set_cpu_flag(c, CPU_NEGATIVE,  trunc_sum & 0x80);
             c->acc = trunc_sum;
         }
         break;
         //Increments a given memory value by 1
-        case INC: {
+        case CPU_OPCODE_INC: {
             uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
             uint8_t val = mem_read(c->b, param);
             val++;
 
             mem_write(c->b, param, val);
-            set_cpu_flag(c, ZERO, val == 0);
-            set_cpu_flag(c, NEGATIVE, val & 0x80);
+            set_cpu_flag(c, CPU_ZERO, val == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, val & 0x80);
         }
         break;
         //Decrements a given memory value by 1
-        case DEC: {
+        case CPU_OPCODE_DEC: {
             uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
             uint8_t val = mem_read(c->b, param);
             val--;
 
             mem_write(c->b, param, val);
-            set_cpu_flag(c, ZERO, val == 0);
-            set_cpu_flag(c, NEGATIVE, val & 0x80);
+            set_cpu_flag(c, CPU_ZERO, val == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, val & 0x80);
         }
         break;
         //Increments the value in the x register by 1
-        case INX:
+        case CPU_OPCODE_INX:
             c->x++;
-            set_cpu_flag(c, ZERO, c->x == 0);
-            set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->x == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->x & 0x80));
             break;
         //Decrements the value in the x register by 1
-        case DEX:
+        case CPU_OPCODE_DEX:
             c->x--;
-            set_cpu_flag(c, ZERO, c->x == 0);
-            set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->x == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->x & 0x80));
             break;
         //Increments the value in the y register by 1
-        case INY:
+        case CPU_OPCODE_INY:
             c->y++;
-            set_cpu_flag(c, ZERO, c->y == 0);
-            set_cpu_flag(c, NEGATIVE, (c->y & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->y == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->y & 0x80));
             break;
         //Decrements the value in the y register by 1
-        case DEY:
+        case CPU_OPCODE_DEY:
             c->y--;
-            set_cpu_flag(c, ZERO, c->y == 0);
-            set_cpu_flag(c, NEGATIVE, (c->y & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->y == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->y & 0x80));
             break;
         //Shifts a memory value one bit to the left,
         //Setting the carry flag to the bit shifted out
-        case ASL:
-            if(instr.addr_mode == ACCUMULATOR) {
-                set_cpu_flag(c, CARRY, (c->acc & 0x80));
+        case CPU_OPCODE_ASL:
+            if(instr.addr_mode == CPU_ADDR_ACCUMULATOR) {
+                set_cpu_flag(c, CPU_CARRY, (c->acc & 0x80));
                 c->acc <<= 1;
-                set_cpu_flag(c, ZERO, c->acc == 0);
-                set_cpu_flag(c, NEGATIVE, c->acc & 0x80);
+                set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+                set_cpu_flag(c, CPU_NEGATIVE, c->acc & 0x80);
             }
             else {
                 uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
                 uint8_t val = mem_read(c->b, param);
-                set_cpu_flag(c, CARRY, val & 0x80);
+                set_cpu_flag(c, CPU_CARRY, val & 0x80);
                 val <<= 1;
                 mem_write(c->b, param, val);
-                set_cpu_flag(c, ZERO, val == 0);
-                set_cpu_flag(c, NEGATIVE, val & 0x80);
+                set_cpu_flag(c, CPU_ZERO, val == 0);
+                set_cpu_flag(c, CPU_NEGATIVE, val & 0x80);
             }
             break;
         //Shifts a memory value one bit to the right,
         //Setting the carry flag to the bit shifted out
-        case LSR:
-            if(instr.addr_mode == ACCUMULATOR) {
-                set_cpu_flag(c, CARRY, (c->acc & 0x1));
+        case CPU_OPCODE_LSR:
+            if(instr.addr_mode == CPU_ADDR_ACCUMULATOR) {
+                set_cpu_flag(c, CPU_CARRY, (c->acc & 0x1));
                 c->acc >>= 1;
-                set_cpu_flag(c, ZERO, c->acc == 0);
-                set_cpu_flag(c, NEGATIVE, 0);
+                set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+                set_cpu_flag(c, CPU_NEGATIVE, 0);
             }
             else {
                 uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
                 uint8_t val = mem_read(c->b, param);
-                set_cpu_flag(c, CARRY, val & 0x1);
+                set_cpu_flag(c, CPU_CARRY, val & 0x1);
                 val >>= 1;
                 mem_write(c->b, param, val);
-                set_cpu_flag(c, ZERO, val == 0);
-                set_cpu_flag(c, NEGATIVE, 0);
+                set_cpu_flag(c, CPU_ZERO, val == 0);
+                set_cpu_flag(c, CPU_NEGATIVE, 0);
             }
             break;
         //Rotates a memory value one bit to the left
         //by shifting one bit to the left and setting the MSB
         //to the bit shifted out
         //Sets the carry flag to the bit shifted out
-        case ROL:
-            if(instr.addr_mode == ACCUMULATOR) {
-                uint8_t old_carry = get_cpu_flag(c, CARRY);
-                set_cpu_flag(c, CARRY, (c->acc & 0x80));
+        case CPU_OPCODE_ROL:
+            if(instr.addr_mode == CPU_ADDR_ACCUMULATOR) {
+                uint8_t old_carry = get_cpu_flag(c, CPU_CARRY);
+                set_cpu_flag(c, CPU_CARRY, (c->acc & 0x80));
                 c->acc <<= 1;
                 c->acc |= old_carry;
-                set_cpu_flag(c, ZERO, c->acc == 0);
-                set_cpu_flag(c, NEGATIVE, c->acc & 0x80);
+                set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+                set_cpu_flag(c, CPU_NEGATIVE, c->acc & 0x80);
             }
             else {
                 uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
-                uint8_t old_carry = get_cpu_flag(c, CARRY);
+                uint8_t old_carry = get_cpu_flag(c, CPU_CARRY);
                 uint8_t val = mem_read(c->b, param);
-                set_cpu_flag(c, CARRY, val & 0x80);
+                set_cpu_flag(c, CPU_CARRY, val & 0x80);
                 val <<= 1;
                 val |= old_carry;
                 mem_write(c->b, param, val);
-                set_cpu_flag(c, ZERO, val == 0);
-                set_cpu_flag(c, NEGATIVE, val & 0x80);
+                set_cpu_flag(c, CPU_ZERO, val == 0);
+                set_cpu_flag(c, CPU_NEGATIVE, val & 0x80);
             }
             break;
         //Rotates a memory value one bit to the right
         //by shifting one bit to the right and setting the LSB
         //to the bit shifted out
         //Sets the carry flag to the bit shifted out
-        case ROR:
-            if(instr.addr_mode == ACCUMULATOR) {
-                uint8_t old_carry = get_cpu_flag(c, CARRY);
-                set_cpu_flag(c, CARRY, (c->acc & 0x1));
+        case CPU_OPCODE_ROR:
+            if(instr.addr_mode == CPU_ADDR_ACCUMULATOR) {
+                uint8_t old_carry = get_cpu_flag(c, CPU_CARRY);
+                set_cpu_flag(c, CPU_CARRY, (c->acc & 0x1));
                 c->acc >>= 1;
                 c->acc |= (old_carry << 7);
-                set_cpu_flag(c, ZERO, c->acc == 0);
-                set_cpu_flag(c, NEGATIVE, c->acc & 0x80);
+                set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+                set_cpu_flag(c, CPU_NEGATIVE, c->acc & 0x80);
             }
             else {
                 uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
-                uint8_t old_carry = get_cpu_flag(c, CARRY);
+                uint8_t old_carry = get_cpu_flag(c, CPU_CARRY);
                 uint8_t val = mem_read(c->b, param);
-                set_cpu_flag(c, CARRY, val & 0x1);
+                set_cpu_flag(c, CPU_CARRY, val & 0x1);
                 val >>= 1;
                 val |= (old_carry << 7);
                 mem_write(c->b, param, val);
-                set_cpu_flag(c, ZERO, val == 0);
-                set_cpu_flag(c, NEGATIVE, val & 0x80);
+                set_cpu_flag(c, CPU_ZERO, val == 0);
+                set_cpu_flag(c, CPU_NEGATIVE, val & 0x80);
             }
             break;
         //Ands the value in the accumulator and some memory value
-        case AND: {
+        case CPU_OPCODE_AND: {
             uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
             c->acc &= param;
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->acc & 0x80));
         }
         break;
         //Ors the value in the accumulator and some memory value
-        case ORA: {
+        case CPU_OPCODE_ORA: {
             uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
             c->acc |= param;
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->acc & 0x80));
         }
         break;
         //Xors the value in the accumulator and some memory value
-        case XOR: {
+        case CPU_OPCODE_XOR: {
             uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
             c->acc ^= param;
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->acc & 0x80));
         }
         break;
         //Ands the accumulator and a memory value and then sets CPU flags
         //if any bits are set, specifically NEGATIVE if bit 7 is set
         //OVERFLOW if bit 6 is set, or ZERO if the result is 0
         //Does not modfiy the value in the accumulator.
-        case BIT: {
+        case CPU_OPCODE_BIT: {
             uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
-            set_cpu_flag(c, NEGATIVE, (param & 0x80));
-            set_cpu_flag(c, OVERFLOW, (param & 0x40));
+            set_cpu_flag(c, CPU_NEGATIVE, (param & 0x80));
+            set_cpu_flag(c, CPU_OVERFLOW, (param & 0x40));
             param &= c->acc;
-            set_cpu_flag(c, ZERO, param == 0);
+            set_cpu_flag(c, CPU_ZERO, param == 0);
         }
         break;
         //Compares the accumulator to a memory value
-        case CMP:
+        case CPU_OPCODE_CMP:
             compare(c, c->acc, get_argument(c, instr.addr_mode, 1, &cycles));
             break;
         //Compares the x register to a memory value
-        case CPX:
+        case CPU_OPCODE_CPX:
             compare(c, c->x, get_argument(c, instr.addr_mode, 1, &cycles));
             break;
         //Compares the y register to a memory value
-        case CPY:
+        case CPU_OPCODE_CPY:
             compare(c, c->y, get_argument(c, instr.addr_mode, 1, &cycles));
             break;
         //Branches if the carry flag is not set
-        case BCC:
-            branch(c, !get_cpu_flag(c, CARRY), &cycles);
+        case CPU_OPCODE_BCC:
+            branch(c, !get_cpu_flag(c, CPU_CARRY), &cycles);
             break;
         //Braches if the carry flag is set
-        case BCS:
-            branch(c, get_cpu_flag(c, CARRY), &cycles);
+        case CPU_OPCODE_BCS:
+            branch(c, get_cpu_flag(c, CPU_CARRY), &cycles);
             break;
         //Branches if the zero flag is set
-        case BEQ:
-            branch(c, get_cpu_flag(c, ZERO), &cycles);
+        case CPU_OPCODE_BEQ:
+            branch(c, get_cpu_flag(c, CPU_ZERO), &cycles);
             break;
         //Branches if the zero flag is not set
-        case BNE:
-            branch(c, !get_cpu_flag(c, ZERO), &cycles);
+        case CPU_OPCODE_BNE:
+            branch(c, !get_cpu_flag(c, CPU_ZERO), &cycles);
             break;
         //Branches if the negative flag is not set
-        case BPL:
-            branch(c, !get_cpu_flag(c, NEGATIVE), &cycles);
+        case CPU_OPCODE_BPL:
+            branch(c, !get_cpu_flag(c, CPU_NEGATIVE), &cycles);
             break;
         //Branches if the negative flag is set
-        case BMI:
-            branch(c, get_cpu_flag(c, NEGATIVE), &cycles);
+        case CPU_OPCODE_BMI:
+            branch(c, get_cpu_flag(c, CPU_NEGATIVE), &cycles);
             break;
         //Branches if the overflow flag is not set
-        case BVC:
-            branch(c, !get_cpu_flag(c, OVERFLOW), &cycles);
+        case CPU_OPCODE_BVC:
+            branch(c, !get_cpu_flag(c, CPU_OVERFLOW), &cycles);
             break;
         //Branches if the overflow flag is set
-        case BVS:
-            branch(c, get_cpu_flag(c, OVERFLOW), &cycles);
+        case CPU_OPCODE_BVS:
+            branch(c, get_cpu_flag(c, CPU_OVERFLOW), &cycles);
             break;
         //Sets the pc to the memory address specified
-        case JMP:
+        case CPU_OPCODE_JMP:
             c->pc = get_argument(c, instr.addr_mode, 0, &cycles);
             break;
         //Pushes the pc onto the stack and jumps to the subroutine
         //at the given memory address
-        case JSR: {
+        case CPU_OPCODE_JSR: {
             uint16_t addr = get_argument(c, instr.addr_mode, 0, &cycles);
             uint16_t ret = c->pc - 1;
             push(c, ret >> 8);
@@ -765,7 +765,7 @@ size_t execute_instr(cpu *c) {
         }
         break;
         //Returns from a subroutine by pulling the pc from the stack
-        case RTS:
+        case CPU_OPCODE_RTS:
             pull_pc(c);
             c->pc++;
             break;
@@ -773,198 +773,198 @@ size_t execute_instr(cpu *c) {
         //Pushes the processor status register with the Break flag set to true to the stack
         //Disables interrupts
         //Loads the pc low byte from 0xFFFE and the high byte from 0xFFFF
-        case BRK:
-            if(instr.addr_mode == IMPLICIT) fetch_byte(c); //Need to fetch dummy opcode since BRK behaves as a 2 byte instruction even though it is only 1 byte
+        case CPU_OPCODE_BRK:
+            if(instr.addr_mode == CPU_ADDR_IMPLICIT) fetch_byte(c); //Need to fetch dummy opcode since BRK behaves as a 2 byte instruction even though it is only 1 byte
             push_pc(c);
             push(c, (c->proc_stat_reg | (1 << 4)));
-            set_cpu_flag(c, INTERRUPT_DISABLE, 1);
+            set_cpu_flag(c, CPU_INTERRUPT_DISABLE, 1);
             set_pc(c, 0xFFFE);
             break;
         //Returns from an interrupt by pulling the flags from
         //the stack and then pulling the old pc from the stack
-        case RTI:
+        case CPU_OPCODE_RTI:
             c->proc_stat_reg = pull(c);
             pull_pc(c);
             break;
         //Pushes the accumulator to the stack
-        case PHA:
+        case CPU_OPCODE_PHA:
             push(c, c->acc);
             break;
         //Pulls the accumulator from the stack
-        case PLA:
+        case CPU_OPCODE_PLA:
             c->acc = pull(c);
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->acc & 0x80));
             break;
         //Pushes the status register to the stack
-        case PHP:
+        case CPU_OPCODE_PHP:
             push(c, c->proc_stat_reg | 0x30);
             break;
         //Pulls the status register from the stack
-        case PLP:
+        case CPU_OPCODE_PLP:
             c->proc_stat_reg = pull(c);
             break;
         //Sets the stack pointer to the value of the x register
-        case TXS:
+        case CPU_OPCODE_TXS:
             c->sp = c->x;
             break;
         //Sets the x register to the value of the stack pointer
-        case TSX:
+        case CPU_OPCODE_TSX:
             c->x = c->sp;
-            set_cpu_flag(c, ZERO, c->x == 0);
-            set_cpu_flag(c, NEGATIVE, (c->x & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->x == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->x & 0x80));
             break;
         //Clears the carry flag
-        case CLC:
-            set_cpu_flag(c, CARRY, 0);
+        case CPU_OPCODE_CLC:
+            set_cpu_flag(c, CPU_CARRY, 0);
             break;
         //Sets the carry flag
-        case SEC:
-            set_cpu_flag(c, CARRY, 1);
+        case CPU_OPCODE_SEC:
+            set_cpu_flag(c, CPU_CARRY, 1);
             break;
         //Clears the interrupt disable flag
-        case CLI:
-            set_cpu_flag(c, INTERRUPT_DISABLE, 0);
+        case CPU_OPCODE_CLI:
+            set_cpu_flag(c, CPU_INTERRUPT_DISABLE, 0);
             break;
         //Sets the interrupt disable flag
-        case SEI:
-            set_cpu_flag(c, INTERRUPT_DISABLE, 1);
+        case CPU_OPCODE_SEI:
+            set_cpu_flag(c, CPU_INTERRUPT_DISABLE, 1);
             break;
         //Clears the decimal flag
-        case CLD:
-            set_cpu_flag(c, DECIMAL, 0);
+        case CPU_OPCODE_CLD:
+            set_cpu_flag(c, CPU_DECIMAL, 0);
             break;
         //Sets the decimal flag
-        case SED:
-            set_cpu_flag(c, DECIMAL, 1);
+        case CPU_OPCODE_SED:
+            set_cpu_flag(c, CPU_DECIMAL, 1);
             break;
         //Clears the overflow flag
-        case CLV:
-            set_cpu_flag(c, OVERFLOW, 0);
+        case CPU_OPCODE_CLV:
+            set_cpu_flag(c, CPU_OVERFLOW, 0);
             break;
         //Do nothing. Its in the name
-        case NOP:
+        case CPU_OPCODE_NOP:
             //Some of the invalid NOP-like operations still change the pc and consume bytes when addressing
             //So make an unused called to get_argument to simulate this
             get_argument(c, instr.addr_mode, 0, &cycles);
             break;
         //============================Illegal opcodes=============================
         //Stop the program early
-        case STP:
+        case CPU_OPCODE_STP:
             c->stop = 1;
             break;
         //ASL + ORA
-        case SLO: {
+        case CPU_OPCODE_SLO: {
             //ASL
             uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
             uint8_t val = mem_read(c->b, param);
-            set_cpu_flag(c, CARRY, val & 0x80);
+            set_cpu_flag(c, CPU_CARRY, val & 0x80);
             val <<= 1;
             mem_write(c->b, param, val);
 
             //ORA
             c->acc |= val;
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->acc & 0x80));
         }
         break;
         //AND then set carry flag to bit 7
-        case ANC: {
+        case CPU_OPCODE_ANC: {
             //AND
             uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
             c->acc &= param;
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->acc & 0x80));
 
             //Setting carry flag to bit 7
-            set_cpu_flag(c, CARRY, c->acc & 0x80);
+            set_cpu_flag(c, CPU_CARRY, c->acc & 0x80);
         }
         break;
         //ROL + AND
-        case RLA: {
+        case CPU_OPCODE_RLA: {
             //ROL
             uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
-            uint8_t old_carry = get_cpu_flag(c, CARRY);
+            uint8_t old_carry = get_cpu_flag(c, CPU_CARRY);
             uint8_t val = mem_read(c->b, param);
-            set_cpu_flag(c, CARRY, val & 0x80);
+            set_cpu_flag(c, CPU_CARRY, val & 0x80);
             val <<= 1;
             val |= old_carry;
             mem_write(c->b, param, val);
 
             //AND
             c->acc &= val;
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->acc & 0x80));
         }
         break;
         //LSR + XOR
-        case SRE: {
+        case CPU_OPCODE_SRE: {
             //LSR
             uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
             uint8_t val = mem_read(c->b, param);
-            set_cpu_flag(c, CARRY, val & 0x1);
+            set_cpu_flag(c, CPU_CARRY, val & 0x1);
             val >>= 1;
             mem_write(c->b, param, val);
-            set_cpu_flag(c, ZERO, val == 0);
-            set_cpu_flag(c, NEGATIVE, 0);
+            set_cpu_flag(c, CPU_ZERO, val == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, 0);
 
             //XOR
             c->acc ^= val;
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->acc & 0x80));
         }
         break;
         //AND + LSR
-        case ALR: {
+        case CPU_OPCODE_ALR: {
             //AND
             uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
             c->acc &= param;
 
             //LSR
-            set_cpu_flag(c, CARRY, c->acc & 0x1);
+            set_cpu_flag(c, CPU_CARRY, c->acc & 0x1);
             c->acc >>= 1;
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, 0);
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, 0);
         }
         break;
         //AND then ROR
-        case ARR:{
+        case CPU_OPCODE_ARR:{
             //AND
             uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
             c->acc &= param;
 
             //ROR:
-            uint8_t old_carry = get_cpu_flag(c, CARRY);
-            set_cpu_flag(c, CARRY, (c->acc & 0x1));
+            uint8_t old_carry = get_cpu_flag(c, CPU_CARRY);
+            set_cpu_flag(c, CPU_CARRY, (c->acc & 0x1));
             c->acc >>= 1;
             c->acc |= (old_carry << 7);
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, c->acc & 0x80);
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, c->acc & 0x80);
         }
         break;
         //ROR + ADC
-        case RRA: {
+        case CPU_OPCODE_RRA: {
             //ROR
             uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
-            uint8_t old_carry = get_cpu_flag(c, CARRY);
+            uint8_t old_carry = get_cpu_flag(c, CPU_CARRY);
             uint8_t val = mem_read(c->b, param);
-            set_cpu_flag(c, CARRY, val & 0x1);
+            set_cpu_flag(c, CPU_CARRY, val & 0x1);
             val >>= 1;
             val |= (old_carry << 7);
             mem_write(c->b, param, val);
 
             //ADC
-            uint16_t sum = c->acc + val + get_cpu_flag(c, CARRY);
+            uint16_t sum = c->acc + val + get_cpu_flag(c, CPU_CARRY);
             uint8_t trunc_sum = (uint8_t)sum;
-            set_cpu_flag(c, CARRY, sum > 0xFF);
-            set_cpu_flag(c, ZERO, trunc_sum == 0);
-            set_cpu_flag(c, OVERFLOW, (~(c->acc ^ val) & (c->acc ^ trunc_sum) & 0x80));
-            set_cpu_flag(c, NEGATIVE,  trunc_sum & 0x80);
+            set_cpu_flag(c, CPU_CARRY, sum > 0xFF);
+            set_cpu_flag(c, CPU_ZERO, trunc_sum == 0);
+            set_cpu_flag(c, CPU_OVERFLOW, (~(c->acc ^ val) & (c->acc ^ trunc_sum) & 0x80));
+            set_cpu_flag(c, CPU_NEGATIVE,  trunc_sum & 0x80);
             c->acc = trunc_sum;
         }
         break;
         //A AND X stored in some memory location
-        case SAX: {
+        case CPU_OPCODE_SAX: {
             uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
             uint8_t val = c->acc & c->x;
             mem_write(c->b, param, val);
@@ -974,28 +974,28 @@ size_t execute_instr(cpu *c) {
         //(A OR CONST) AND X AND oper -> A
         //Where const is one of 0x00, 0xFF, 0xEE, or others, depending on the chip series/temperature
         //I am just going to default it to 0xFF for now
-        case XAA: {
+        case CPU_OPCODE_XAA: {
             uint8_t cnst = 0xFF;
             uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
             c->acc = (c->acc | cnst) & c->x & param;
 
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, c->acc & 0x80);
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, c->acc & 0x80);
         }
         break;
         //Stores ACC AND X AND (High byte of memory address + 1) at the given memory address
-        case AHX: {
+        case CPU_OPCODE_AHX: {
             uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
             uint8_t hi = (param & 0xFF00) >> 8;
             uint8_t val = c->acc & c->x & (hi + 1);
             mem_write(c->b, param, val);
 
-            set_cpu_flag(c, ZERO, val == 0);
-            set_cpu_flag(c, NEGATIVE, val & 0x80);
+            set_cpu_flag(c, CPU_ZERO, val == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, val & 0x80);
         }
         break;
         //A AND X -> SP, A AND X AND (high byte of memory address + 1) at address
-        case TAS: {
+        case CPU_OPCODE_TAS: {
             c->sp = c->acc & c->x;
 
             uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
@@ -1003,31 +1003,31 @@ size_t execute_instr(cpu *c) {
             uint8_t val = c->acc & c->x & (hi + 1);
             mem_write(c->b, param, val);
 
-            set_cpu_flag(c, ZERO, val == 0);
-            set_cpu_flag(c, NEGATIVE, val & 0x80);
+            set_cpu_flag(c, CPU_ZERO, val == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, val & 0x80);
         }
         break;
         //LDA + LDX
-        case LAX:
+        case CPU_OPCODE_LAX:
             c->acc = get_argument(c, instr.addr_mode, 1, &cycles);
             c->x = c->acc;
-            set_cpu_flag(c, ZERO, c->acc == 0);
-            set_cpu_flag(c, NEGATIVE, (c->acc & 0x80));
+            set_cpu_flag(c, CPU_ZERO, c->acc == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (c->acc & 0x80));
             break;
         //Memory AND SP -> A, X, SP
-        case LAS: {
+        case CPU_OPCODE_LAS: {
             uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
             param &= c->sp;
             c->acc = param;
             c->x = param;
             c->sp = param;
 
-            set_cpu_flag(c, ZERO, param == 0);
-            set_cpu_flag(c, NEGATIVE, (param & 0x80));
+            set_cpu_flag(c, CPU_ZERO, param == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, (param & 0x80));
         }
         break;
         //DEC + CMP
-        case DCP: {
+        case CPU_OPCODE_DCP: {
             //DEC
             uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
             uint8_t val = mem_read(c->b, param);
@@ -1039,7 +1039,7 @@ size_t execute_instr(cpu *c) {
         }
         break;
         //CMP and DEC simultaneously
-        case AXS: {
+        case CPU_OPCODE_AXS: {
             uint8_t param = get_argument(c, instr.addr_mode, 1, &cycles);
             uint8_t val = c->acc & c->x;
             compare(c, val, param);
@@ -1047,7 +1047,7 @@ size_t execute_instr(cpu *c) {
         }
         break;
         //INC + SBC
-        case ISC: {
+        case CPU_OPCODE_ISC: {
             //INC
             uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
             uint8_t val = mem_read(c->b, param);
@@ -1055,35 +1055,35 @@ size_t execute_instr(cpu *c) {
             mem_write(c->b, param, val);
 
             //SBC
-            uint16_t sum = c->acc - val - !get_cpu_flag(c, CARRY);
+            uint16_t sum = c->acc - val - !get_cpu_flag(c, CPU_CARRY);
             uint8_t trunc_sum = (uint8_t)sum;
-            set_cpu_flag(c, CARRY, !(sum > 0xFF));
-            set_cpu_flag(c, ZERO, trunc_sum == 0);
-            set_cpu_flag(c, OVERFLOW, (c->acc ^ trunc_sum) & (trunc_sum ^ ~val) & 0x80);
-            set_cpu_flag(c, NEGATIVE,  trunc_sum & 0x80);
+            set_cpu_flag(c, CPU_CARRY, !(sum > 0xFF));
+            set_cpu_flag(c, CPU_ZERO, trunc_sum == 0);
+            set_cpu_flag(c, CPU_OVERFLOW, (c->acc ^ trunc_sum) & (trunc_sum ^ ~val) & 0x80);
+            set_cpu_flag(c, CPU_NEGATIVE,  trunc_sum & 0x80);
             c->acc = trunc_sum;
         }
         break;
         //Stores X and (high byte of memory address + 1) at given memory address
-        case SHX: {
+        case CPU_OPCODE_SHX: {
             uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
             uint8_t hi = (param & 0xFF00) >> 8;
             uint8_t val = c->x & (hi + 1);
             mem_write(c->b, param, val);
 
-            set_cpu_flag(c, ZERO, val == 0);
-            set_cpu_flag(c, NEGATIVE, val & 0x80);
+            set_cpu_flag(c, CPU_ZERO, val == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, val & 0x80);
         }
         break;
         //Stores Y and (high byte of memory address + 1) at given memory address
-        case SHY: {
+        case CPU_OPCODE_SHY: {
             uint16_t param = get_argument(c, instr.addr_mode, 0, &cycles);
             uint8_t hi = (param & 0xFF00) >> 8;
             uint8_t val = c->y & (hi + 1);
             mem_write(c->b, param, val);
 
-            set_cpu_flag(c, ZERO, val == 0);
-            set_cpu_flag(c, NEGATIVE, val & 0x80);
+            set_cpu_flag(c, CPU_ZERO, val == 0);
+            set_cpu_flag(c, CPU_NEGATIVE, val & 0x80);
         }
         break;
         default:
@@ -1097,8 +1097,8 @@ size_t execute_instr(cpu *c) {
 void print_cpu_state(cpu *c) {
     printf("Accumulator: %hhu \nX Register: %hhu \nY Register: %hhu \nStack Pointer: %hhu\nPC: %hu\n", c->acc, c->x, c->y, c->sp, c->pc);
     printf("Status Register:\n Carry: %hhu\n Zero: %hhu\n Interrupt Disable: %hhu\n Decimal: %hhu\n Break: %hhu\n Overflow: %hhu\n Negative: %hhu\n",
-           get_cpu_flag(c, CARRY), get_cpu_flag(c, ZERO), get_cpu_flag(c, INTERRUPT_DISABLE), get_cpu_flag(c, DECIMAL),
-           get_cpu_flag(c, BREAK), get_cpu_flag(c, OVERFLOW), get_cpu_flag(c, NEGATIVE));
+           get_cpu_flag(c, CPU_CARRY), get_cpu_flag(c, CPU_ZERO), get_cpu_flag(c, CPU_INTERRUPT_DISABLE), get_cpu_flag(c, CPU_DECIMAL),
+           get_cpu_flag(c, CPU_BREAK), get_cpu_flag(c, CPU_OVERFLOW), get_cpu_flag(c, CPU_NEGATIVE));
 }
 
 //Prints the current contents of the stack in a numbered list with the most recently added value at the top
