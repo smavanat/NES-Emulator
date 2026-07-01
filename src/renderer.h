@@ -29,8 +29,8 @@ void pixelbuffer_free(PixelBuffer *pb);
 #define VERTICIES_PER_TRIANGLE 3
 #define INDECIES_PER_QUAD 6
 #define INDECIES_PER_TRIANGLE 3
-#define MAX_VERTICIES MAX_QUADS * VERTICIES_PER_QUAD + MAX_TRIANGLES * VERTICIES_PER_TRIANGLE
-#define MAX_INDECIES MAX_QUADS * INDECIES_PER_QUAD + MAX_TRIANGLES * INDECIES_PER_TRIANGLE
+#define INITIAL_VERTEX_CAPACITY MAX_QUADS * VERTICIES_PER_QUAD + MAX_TRIANGLES * VERTICIES_PER_TRIANGLE
+#define INITIAL_INDEX_CAPACITY MAX_QUADS * INDECIES_PER_QUAD + MAX_TRIANGLES * INDECIES_PER_TRIANGLE
 #define INVALID_TEX_INDEX 1248
 #define CIRCLE_LINE_SEGMENTS 64 //Number of line segments that make up the circumference of a circle
 
@@ -74,8 +74,6 @@ TextureAtlas atlas_init_blank(uint32_t width, uint32_t height, uint8_t pixel_siz
 NES_Quad atlas_pack(TextureAtlas *a, uint8_t* pixels, size_t w, size_t h, uint8_t pixel_size);
 void atlas_free(TextureAtlas *a);
 
-//TODO: Add a way of ordering textures in the renderer (some sort of depth filter)
-
 //Represents a single batch sent off in a draw call from a texture atlas
 typedef struct {
     Render_Vertex *vertex_data;
@@ -87,22 +85,27 @@ typedef struct {
     size_t index_count;
 } AtlasRenderBatch;
 
+typedef struct {
+    AtlasRenderBatch *atlas_batches;
+    int earliest_atlas_used; //If negative, this layer is not used, otherwise is the index of the earliest atlas used
+} Render_Layer;
+
 //Pixel renderer that renders a single frame
 typedef struct {
+    Render_Layer layers[MAX_LAYERS]; //Layers of rendering
     mat4 projection; //projection matrix for this renderer
-    AtlasRenderBatch *rb;
     uint32_t vao; //vao this renderer uses
     uint32_t vbo; //vbo this renderer uses
     uint32_t ebo; //ebo this renderer uses
     uint32_t shader; //shader this renderer uses
+    size_t atlas_batch_capacity;
+    size_t num_atlas_batches;
 
-    size_t tex_atlas_capacity;
-    size_t num_text_atlas;
     uint32_t screen_height;
     uint32_t screen_width;
 } Renderer;
 
-#define GET_ATLAS_BATCH(r, i) (r)->rb[i]
+#define GET_ATLAS_BATCH(r, layer, i) (r)->layers[layer].atlas_batches[i]
 
 //Initialises the pixel renderer
 Renderer render_init(size_t width, size_t height);
@@ -118,23 +121,25 @@ void render_end(Renderer *r);
 //      Add a way to remove an atlas efficiently
 uint32_t add_texture_atlas(Renderer *r, TextureAtlas *ta);
 //Draws a quad
-void render_draw_atlas_quad(Renderer *r, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour, uint32_t atlas);
+void render_draw_atlas_quad(Renderer *r, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour, uint32_t atlas, uint8_t layer);
 //Draws a dynamically allocated texture
-void render_draw_pixel_texture(Renderer *r, uint32_t texture, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour);
+void render_draw_texture(Renderer *r, uint32_t texture, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour);
 //Draws a frame straight to a texture by uploading it to a pixel buffer
 void pixelbuffer_updload_data(PixelBuffer *pb, uint8_t *data);
 //Draws a pixel buffer
+//TODO: Figure out how to add a layering system to drawing pixelbuffers/dynamic textures in general
 void render_draw_pixel_buffer(Renderer *r, PixelBuffer *pb);
 //Draws a filled circle
-void render_draw_circle(Renderer *r, NES_Vector2 centre, float radius, NES_Vector4 colour);
+void render_draw_circle(Renderer *r, NES_Vector2 centre, float radius, NES_Vector4 colour, uint8_t layer);
 //Draws a filled quad
-void render_draw_quad(Renderer *r, NES_Quad quad, NES_Vector4 colour);
+void render_draw_quad(Renderer *r, NES_Quad quad, NES_Vector4 colour, uint8_t layer);
 //TODO:Draws an unfilled circle
-void render_draw_unfilled_circle(Renderer *r, NES_Vector2 centre, float radius, NES_Vector4 colour);
+void render_draw_unfilled_circle(Renderer *r, NES_Vector2 centre, float radius, NES_Vector4 colour, uint8_t layer);
 //Draws an unfilled quad
-void render_draw_unfilled_quad(Renderer *r, NES_Quad quad, float thickness, NES_Vector4 colour);
+void render_draw_unfilled_quad(Renderer *r, NES_Quad quad, float thickness, NES_Vector4 colour, uint8_t layer);
 //Draws a line between two points
-void render_draw_line(Renderer *r, NES_Vector2 start_pos, NES_Vector2 end_pos, float thickness, NES_Vector4 colour);
+void render_draw_line(Renderer *r, NES_Vector2 start_pos, NES_Vector2 end_pos, float thickness, NES_Vector4 colour, uint8_t layer);
+void render_draw_quad_bordered(Renderer *r, NES_Quad quad, NES_Vector4 q_col, NES_Vector4 b_col, float thick, uint8_t layer);
 
 //Determines the projection matrix
 void ortho(float left, float right, float bottom, float top, float nearZ, float farZ, mat4 dest);

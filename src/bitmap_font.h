@@ -48,8 +48,8 @@ typedef struct {
 uint8_t bitmap_font_init(Bitmap_Font_Desc *opts, uint32_t atls, uint32_t tpw, uint32_t tph, uint32_t cpw, uint32_t cph, uint32_t cpx, uint32_t cpy, uint32_t tbpx, uint32_t tbpy, Bitmap_Layout lyt, union layout_desc desc);
 void bitmap_font_free(Bitmap_Font_Desc *bf);
 
-uint8_t bitmap_draw_char(Renderer *r, Bitmap_Font_Desc *bf, char c, NES_Quad dimensions, NES_Vector4 colour);
-uint8_t bitmap_draw_string(Renderer *r, Bitmap_Font_Desc *bf, const char *str, size_t str_len, NES_Vector2 gap, NES_Vector2 start, NES_Vector2 scale, NES_Vector4 colour);
+uint8_t bitmap_draw_char(Renderer *r, Bitmap_Font_Desc *bf, char c, NES_Quad dimensions, NES_Vector4 colour, uint8_t layer);
+uint8_t bitmap_draw_string(Renderer *r, Bitmap_Font_Desc *bf, const char *str, size_t str_len, NES_Vector2 gap, NES_Vector2 start, NES_Vector2 scale, NES_Vector4 colour, uint8_t layer);
 NES_Vector2 bitmap_measure_text(const char *str, size_t str_len, NES_Vector2 gap, NES_Vector2 scale);
 
 #endif //__BITMAP_FONT_H__

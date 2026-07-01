@@ -33,7 +33,7 @@ void bitmap_font_free(Bitmap_Font_Desc *bf) {
     // }
 }
 
-uint8_t bitmap_draw_char(Renderer *r, Bitmap_Font_Desc *bf, char c, NES_Quad dimensions, NES_Vector4 colour) {
+uint8_t bitmap_draw_char(Renderer *r, Bitmap_Font_Desc *bf, char c, NES_Quad dimensions, NES_Vector4 colour, uint8_t layer) {
     if(c < 32 || c > 126) {
         fprintf(stderr, "Trying to draw a non-ASCII character\n");
         return 0;
@@ -83,12 +83,12 @@ uint8_t bitmap_draw_char(Renderer *r, Bitmap_Font_Desc *bf, char c, NES_Quad dim
     uint32_t x_pixels = x_tiles * (bf->char_pixel_width + bf->char_padding_x) + bf->tex_border_padding_x;
     uint32_t y_pixels = y_tiles * (bf->char_pixel_height + bf->char_padding_y) + bf->tex_border_padding_y;
 
-    render_draw_atlas_quad(r, dimensions, (NES_Quad){x_pixels, y_pixels, bf->char_pixel_width, bf->char_pixel_height}, colour, bf->atlas);
+    render_draw_atlas_quad(r, dimensions, (NES_Quad){x_pixels, y_pixels, bf->char_pixel_width, bf->char_pixel_height}, colour, bf->atlas, layer);
 
     return 1;
 }
 
-uint8_t bitmap_draw_string(Renderer *r, Bitmap_Font_Desc *bf, const char *str, size_t str_len, NES_Vector2 gap, NES_Vector2 start, NES_Vector2 scale, NES_Vector4 colour) {
+uint8_t bitmap_draw_string(Renderer *r, Bitmap_Font_Desc *bf, const char *str, size_t str_len, NES_Vector2 gap, NES_Vector2 start, NES_Vector2 scale, NES_Vector4 colour, uint8_t layer) {
     float x = start.x;
     float y = start.y;
 
@@ -108,7 +108,7 @@ uint8_t bitmap_draw_string(Renderer *r, Bitmap_Font_Desc *bf, const char *str, s
             break;
         }
 
-        if(!bitmap_draw_char(r, bf, str[i], (NES_Quad){x, y, scale.x, scale.y}, colour))
+        if(!bitmap_draw_char(r, bf, str[i], (NES_Quad){x, y, scale.x, scale.y}, colour, layer))
             return 0;
 
         x += scale.x + gap.x;

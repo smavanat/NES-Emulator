@@ -415,7 +415,7 @@ int main(void) {
                             renderCommand->renderData.rectangle.backgroundColor.g/255.0f,
                             renderCommand->renderData.rectangle.backgroundColor.b/255.0f,
                             renderCommand->renderData.rectangle.backgroundColor.a/255.0f,
-                        });
+                        }, 62);
                         // printf("Colour %i: (%f, %f, %f, %f)\n", i, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r);
                     break;
                     // The renderer should draw a colored border inset into the bounding box.
@@ -432,7 +432,7 @@ int main(void) {
                                                 data.textColor.g/255.0f,
                                                 data.textColor.b/255.0f,
                                                 data.textColor.a/255.0f,
-                                           });
+                                           }, 63);
                     }
                         // printf("Text Rendering not currently implemented\n");
                     break;
