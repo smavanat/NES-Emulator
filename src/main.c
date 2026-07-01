@@ -394,7 +394,7 @@ int main(void) {
         Clay_RenderCommandArray renderCommands = Clay_EndLayout(dt); // deltaTime is the time since the last frame, and is used for transitions
 
         render_begin(&r);
-            //TODO: Implement renderer that handles all of these rendering commands. Use stb for text renderering
+            //TODO: Implement renderer that handles all of these rendering commands.
             for(int i = 0; i < renderCommands.length; i++) {
                 Clay_RenderCommand *renderCommand = &renderCommands.internalArray[i];
 
@@ -405,17 +405,17 @@ int main(void) {
                     // The renderer should draw a solid color rectangle.
                     case CLAY_RENDER_COMMAND_TYPE_RECTANGLE:
                         //TODO: Implement rounded corners
-                        // render_draw_quad(&r, (NES_Quad){
-                        //     renderCommand->boundingBox.x,
-                        //     renderCommand->boundingBox.y,
-                        //     renderCommand->boundingBox.width,
-                        //     renderCommand->boundingBox.height,
-                        // }, (NES_Vector4){
-                        //     renderCommand->renderData.rectangle.backgroundColor.r/255.0f,
-                        //     renderCommand->renderData.rectangle.backgroundColor.g/255.0f,
-                        //     renderCommand->renderData.rectangle.backgroundColor.b/255.0f,
-                        //     renderCommand->renderData.rectangle.backgroundColor.a/255.0f,
-                        // });
+                        render_draw_quad(&r, (NES_Quad){
+                            renderCommand->boundingBox.x,
+                            renderCommand->boundingBox.y,
+                            renderCommand->boundingBox.width,
+                            renderCommand->boundingBox.height,
+                        }, (NES_Vector4){
+                            renderCommand->renderData.rectangle.backgroundColor.r/255.0f,
+                            renderCommand->renderData.rectangle.backgroundColor.g/255.0f,
+                            renderCommand->renderData.rectangle.backgroundColor.b/255.0f,
+                            renderCommand->renderData.rectangle.backgroundColor.a/255.0f,
+                        });
                         // printf("Colour %i: (%f, %f, %f, %f)\n", i, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r);
                     break;
                     // The renderer should draw a colored border inset into the bounding box.

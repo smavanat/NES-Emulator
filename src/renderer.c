@@ -69,16 +69,9 @@ const char *fragment_shader = "#version 330 core\n"
                               "out vec4 FragColor;\n"
                               "in vec2 TexCoord;\n"
                               "in vec4 ourColor;\n"
-                              "uniform int useTexture;\n"
                               "uniform sampler2D screenTexture;\n"
                               "void main() {\n"
-    // "float a = texture(screenTexture, TexCoord).a;\n"
-    // "FragColor = vec4(a, a, a, 1.0);\n"
-                              // "   FragColor = vec4(TexCoord, 0.0, 1.0);\n"
-                              "    if(useTexture == 1)\n"
-                              "        FragColor = texture(screenTexture, TexCoord) * ourColor;\n"
-                              "    else\n"
-                              "        FragColor = ourColor;\n"
+                              "    FragColor = texture(screenTexture, TexCoord) * ourColor;\n"
                               "}\n";
 
 //Initialises the pixel renderer
@@ -127,11 +120,13 @@ Renderer render_init(size_t width, size_t height) {
     r.tex_atlas_capacity = 2;
     r.rb = malloc(r.tex_atlas_capacity * sizeof(AtlasRenderBatch));
 
-    r.db = calloc(1, sizeof(DebugRenderBatch));
-    r.db->index_size = MAX_INDECIES;
-    r.db->vertex_size = MAX_VERTICIES;
-    r.db->index_data = malloc(sizeof(uint32_t) * r.db->index_size);
-    r.db->vertex_data = malloc(sizeof(Render_Vertex) * r.db->vertex_size);
+    //Make the special debug atlas as the first one
+    TextureAtlas *ta = malloc(sizeof(TextureAtlas));
+    *ta = atlas_init_blank(1, 1, 4);
+    uint8_t white[4] = {255, 255, 255, 255};
+    atlas_pack(ta, white, 1, 1, 4);
+
+    add_texture_atlas(&r, ta);
 
     return r;
 }
@@ -144,19 +139,18 @@ void render_free(Renderer *r) {
     for(int i = 0; i < r->num_text_atlas; i++) {
         free(GET_ATLAS_BATCH(r, i).vertex_data);
         free(GET_ATLAS_BATCH(r, i).index_data);
+        atlas_free(GET_ATLAS_BATCH(r, i).a);
     }
-    free(r->db->vertex_data);
-    free(r->db->index_data);
+    free(r->rb[0].a);
     free(r->rb);
-    free(r->db);
 }
 
 //Sets up the variables for renderering to the pbo from the Renderer
 void render_begin(Renderer *r) {
-    r->rb->index_count = 0;
-    r->rb->vertex_count = 0;
-    r->db->index_count = 0;
-    r->db->vertex_count = 0;
+    for(int i = 0; i < r->num_text_atlas; i++) {
+        GET_ATLAS_BATCH(r, i).index_count = 0;
+        GET_ATLAS_BATCH(r, i).vertex_count = 0;
+    }
 }
 
 //Ends rendering to the current pixel frame
@@ -171,7 +165,6 @@ void render_end(Renderer *r) {
     glBindBuffer(GL_ARRAY_BUFFER, r->vbo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, r->ebo);
 
-    glUniform1i(glGetUniformLocation(r->shader, "useTexture"), 1);
     for(int i = 0; i < r->num_text_atlas; i++) {
         //TODO: Check if not redefining the buffer sizes using glBufferData
         //and then passing in arrays with a larger size will cause a crash,
@@ -188,16 +181,6 @@ void render_end(Renderer *r) {
             glDrawElements(GL_TRIANGLES, GET_ATLAS_BATCH(r, i).index_count, GL_UNSIGNED_INT, 0); //Make the draw call
         }
     }
-
-    if(r->db->index_count > 0) {
-        glUniform1i(glGetUniformLocation(r->shader, "useTexture"), 0);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, r->db->vertex_count * sizeof(Render_Vertex), r->db->vertex_data); //Copies the data from renderer's triangle data into the vbo
-
-        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, r->db->index_count * sizeof(uint32_t), r->db->index_data); //Copies the quad data into the vbo
-
-        glDrawElements(GL_TRIANGLES, r->db->index_count, GL_UNSIGNED_INT, 0); //Make the draw call
-    }
-
 }
 
 void render_next_atlas_batch(Renderer *r, uint32_t atlas) {
@@ -209,7 +192,7 @@ void render_next_atlas_batch(Renderer *r, uint32_t atlas) {
         GET_ATLAS_BATCH(r, atlas).index_data = temp;
         GET_ATLAS_BATCH(r, atlas).index_size = new_cap;
     }
-    if(GET_ATLAS_BATCH(r, atlas).vertex_count + VERTICES_PER_QUAD >= GET_ATLAS_BATCH(r, atlas).vertex_size) {
+    if(GET_ATLAS_BATCH(r, atlas).vertex_count + VERTICIES_PER_QUAD >= GET_ATLAS_BATCH(r, atlas).vertex_size) {
         size_t new_cap = GET_ATLAS_BATCH(r, atlas).vertex_size * 2;
         Render_Vertex *temp = calloc(new_cap, sizeof(Render_Vertex));
         memcpy(temp, GET_ATLAS_BATCH(r, atlas).vertex_data, sizeof(Render_Vertex) * GET_ATLAS_BATCH(r, atlas).vertex_size);
@@ -218,26 +201,9 @@ void render_next_atlas_batch(Renderer *r, uint32_t atlas) {
         GET_ATLAS_BATCH(r, atlas).vertex_size = new_cap;
     }
 }
-void render_next_debug_batch(Renderer *r) {
-    if(r->db->index_count + INDECIES_PER_QUAD >= r->db->index_size) {
-        size_t new_cap = r->db->index_size * 2;
-        uint32_t *temp = calloc(new_cap, sizeof(uint32_t));
-        memcpy(temp, r->db->index_data, sizeof(uint32_t) * r->db->index_size);
-        free(r->db->index_data);
-        r->db->index_data = temp;
-        r->db->index_size = new_cap;
-    }
-    if(r->db->vertex_count + VERTICES_PER_QUAD >= r->db->vertex_size) {
-        size_t new_cap = r->db->vertex_size * 2;
-        Render_Vertex *temp = calloc(new_cap, sizeof(Render_Vertex));
-        memcpy(temp, r->db->vertex_data, sizeof(Render_Vertex) * r->db->vertex_size);
-        free(r->db->vertex_data);
-        r->db->vertex_data = temp;
-        r->db->vertex_size = new_cap;
-    }
-}
 
 uint32_t add_texture_atlas(Renderer *r, TextureAtlas *ta) {
+    printf("Number of texture atlases: %zu\n", r->num_text_atlas);
     if(r->num_text_atlas >= r->tex_atlas_capacity) {
         size_t newCap = r->tex_atlas_capacity * 2;
         AtlasRenderBatch *temp = malloc(newCap * sizeof(AtlasRenderBatch));
@@ -247,10 +213,12 @@ uint32_t add_texture_atlas(Renderer *r, TextureAtlas *ta) {
         r->tex_atlas_capacity = newCap;
     }
 
+    GET_ATLAS_BATCH(r, r->num_text_atlas).index_count = 0;
+    GET_ATLAS_BATCH(r, r->num_text_atlas).vertex_count = 0;
     GET_ATLAS_BATCH(r, r->num_text_atlas).index_size = MAX_INDECIES;
     GET_ATLAS_BATCH(r, r->num_text_atlas).vertex_size = MAX_VERTICIES;
-    GET_ATLAS_BATCH(r, r->num_text_atlas).index_data = malloc(sizeof(uint32_t) * GET_ATLAS_BATCH(r, r->num_text_atlas).index_size);
-    GET_ATLAS_BATCH(r, r->num_text_atlas).vertex_data = malloc(sizeof(Render_Vertex) * GET_ATLAS_BATCH(r, r->num_text_atlas).vertex_size);
+    GET_ATLAS_BATCH(r, r->num_text_atlas).index_data = malloc(sizeof(uint32_t) * MAX_INDECIES);
+    GET_ATLAS_BATCH(r, r->num_text_atlas).vertex_data = malloc(sizeof(Render_Vertex) * MAX_VERTICIES);
     GET_ATLAS_BATCH(r, r->num_text_atlas).a = ta;
 
     r->num_text_atlas++;
@@ -261,7 +229,7 @@ uint32_t add_texture_atlas(Renderer *r, TextureAtlas *ta) {
 //Draws a texture quad
 void render_draw_atlas_quad(Renderer *r, NES_Quad screen_quad, NES_Quad tex_sub_rect, NES_Vector4 colour, uint32_t atlas) {
     //If we have overreached our current rendering limit or we cannot store any more textures, end the current draw call and start a new one
-    if(GET_ATLAS_BATCH(r, atlas).vertex_count + VERTICES_PER_QUAD >= r->db->vertex_size || GET_ATLAS_BATCH(r, atlas).index_count + INDECIES_PER_QUAD >= GET_ATLAS_BATCH(r, atlas).index_size) {
+    if(GET_ATLAS_BATCH(r, atlas).vertex_count + VERTICIES_PER_QUAD >= GET_ATLAS_BATCH(r, atlas).vertex_size || GET_ATLAS_BATCH(r, atlas).index_count + INDECIES_PER_QUAD >= GET_ATLAS_BATCH(r, atlas).index_size) {
         render_next_atlas_batch(r, atlas);
     }
 
@@ -279,17 +247,13 @@ void render_draw_atlas_quad(Renderer *r, NES_Quad screen_quad, NES_Quad tex_sub_
     float height = GET_ATLAS_BATCH(r, atlas).a->height;
 
     NES_Vector2 uv[4] = {
-        // {tex_sub_rect.x, tex_sub_rect.y},
-        // {tex_sub_rect.x, tex_sub_rect.y+ tex_sub_rect.h},
-        // {tex_sub_rect.x + tex_sub_rect.w, tex_sub_rect.y + tex_sub_rect.h},
-        // {tex_sub_rect.x + tex_sub_rect.w , tex_sub_rect.y}
-        {tex_sub_rect.x/width, tex_sub_rect.y/height},
-        {tex_sub_rect.x/width, tex_sub_rect.y/height+ tex_sub_rect.h/height},
-        {tex_sub_rect.x/width + tex_sub_rect.w/width, tex_sub_rect.y/height + tex_sub_rect.h/height},
-        {tex_sub_rect.x/width + tex_sub_rect.w/width , tex_sub_rect.y/height}
+        {tex_sub_rect.x / width, tex_sub_rect.y / height},
+        {tex_sub_rect.x / width, (tex_sub_rect.y + tex_sub_rect.h) / height},
+        {(tex_sub_rect.x + tex_sub_rect.w) / width, (tex_sub_rect.y + tex_sub_rect.h) / height},
+        {(tex_sub_rect.x + tex_sub_rect.w) / width , tex_sub_rect.y / height}
     };
 
-    for(int i = 0; i < VERTICES_PER_QUAD; i++) {
+    for(int i = 0; i < VERTICIES_PER_QUAD; i++) {
         GET_ATLAS_BATCH(r, atlas).vertex_data[GET_ATLAS_BATCH(r, atlas).vertex_count++] = (Render_Vertex){coords[i], colour, uv[i]};
     }
 
@@ -463,28 +427,29 @@ NES_Quad atlas_pack(TextureAtlas *a, uint8_t* pixels, size_t w, size_t h, uint8_
 }
 
 void draw_triangle_strip(Renderer *r, NES_Vector2 strip[4], NES_Vector4 colour) {
-    if(r->db->vertex_count + VERTICES_PER_QUAD >= r->db->vertex_size || r->db->index_count + INDECIES_PER_QUAD >= r->db->index_size) {
-        render_next_debug_batch(r);
+    if(GET_ATLAS_BATCH(r, 0).vertex_count + VERTICIES_PER_QUAD >= GET_ATLAS_BATCH(r, 0).vertex_size || GET_ATLAS_BATCH(r, 0).index_count + INDECIES_PER_QUAD >= GET_ATLAS_BATCH(r, 0).index_size) {
+        render_next_atlas_batch(r, 0);
     }
 
     //Update the vertex count and vertex data stored in the renderer
-    uint32_t base_index = r->db->vertex_count;
+    uint32_t base_index = GET_ATLAS_BATCH(r, 0).vertex_count;
 
-    for(int i = 0; i < VERTICES_PER_QUAD; i++) {
-        r->db->vertex_data[r->db->vertex_count++] = (Render_Vertex){strip[i], colour};
+    for(int i = 0; i < VERTICIES_PER_QUAD; i++) {
+        GET_ATLAS_BATCH(r, 0).vertex_data[GET_ATLAS_BATCH(r, 0).vertex_count++] = (Render_Vertex){strip[i], colour};
     }
 
     //Need to also add ebo data so we can remove overlapping vertices
     //First triangle
-    r->db->index_data[r->db->index_count++] = base_index;
-    r->db->index_data[r->db->index_count++] = base_index + 1;
-    r->db->index_data[r->db->index_count++] = base_index + 2;
+    GET_ATLAS_BATCH(r, 0).index_data[GET_ATLAS_BATCH(r, 0).index_count++] = base_index;
+    GET_ATLAS_BATCH(r, 0).index_data[GET_ATLAS_BATCH(r, 0).index_count++] = base_index + 1;
+    GET_ATLAS_BATCH(r, 0).index_data[GET_ATLAS_BATCH(r, 0).index_count++] = base_index + 2;
 
     //Second triangle
-    r->db->index_data[r->db->index_count++] = base_index + 1;
-    r->db->index_data[r->db->index_count++] = base_index + 2;
-    r->db->index_data[r->db->index_count++] = base_index + 3;
+    GET_ATLAS_BATCH(r, 0).index_data[GET_ATLAS_BATCH(r, 0).index_count++] = base_index + 1;
+    GET_ATLAS_BATCH(r, 0).index_data[GET_ATLAS_BATCH(r, 0).index_count++] = base_index + 2;
+    GET_ATLAS_BATCH(r, 0).index_data[GET_ATLAS_BATCH(r, 0).index_count++] = base_index + 3;
 }
+
 
 void render_draw_line(Renderer *r, NES_Vector2 start_pos, NES_Vector2 end_pos, float thickness, NES_Vector4 colour) {
     NES_Vector2 delta = {end_pos.x - start_pos.x, end_pos.y - start_pos.y};
@@ -518,16 +483,7 @@ void render_draw_quad(Renderer *r, NES_Quad quad, NES_Vector4 colour) {
 
 void render_draw_quad_bordered(Renderer *r, NES_Quad quad, NES_Vector4 q_col, NES_Vector4 b_col, float thick) {
     render_draw_quad(r, quad, q_col);
-
-    NES_Vector2 tl = {quad.x,          quad.y};
-    NES_Vector2 tr = {quad.x + quad.w, quad.y};
-    NES_Vector2 bl = {quad.x,          quad.y + quad.h};
-    NES_Vector2 br = {quad.x + quad.w, quad.y + quad.h};
-
-    render_draw_line(r, tl, tr, thick, b_col);
-    render_draw_line(r, tr, br, thick, b_col);
-    render_draw_line(r, br, bl, thick, b_col);
-    render_draw_line(r, bl, tl, thick, b_col);
+    render_draw_unfilled_quad(r, quad, thick, b_col);
 }
 
 void render_draw_unfilled_quad(Renderer *r, NES_Quad quad, float thickness, NES_Vector4 colour) {
@@ -544,15 +500,15 @@ void render_draw_unfilled_quad(Renderer *r, NES_Quad quad, float thickness, NES_
 
 void render_draw_circle(Renderer *r, NES_Vector2 centre, float radius, NES_Vector4 colour) {
     //TODO:Change this so we at least draw some of the triangles this batch and the rest in the next one
-    if(r->db->vertex_count + CIRCLE_LINE_SEGMENTS + 1 >= MAX_VERTICIES || r->db->index_count + (CIRCLE_LINE_SEGMENTS * 3) >= MAX_INDECIES) {
-        render_next_debug_batch(r);
+    if(GET_ATLAS_BATCH(r, 0).vertex_count + CIRCLE_LINE_SEGMENTS + 1 >= MAX_VERTICIES || GET_ATLAS_BATCH(r, 0).index_count + (CIRCLE_LINE_SEGMENTS * 3) >= MAX_INDECIES) {
+        render_next_atlas_batch(r, 0);
     }
 
-    uint32_t center_index = r->db->vertex_count;
-    r->db->vertex_data[r->db->vertex_count++] = (Render_Vertex){centre, colour};
+    uint32_t center_index = GET_ATLAS_BATCH(r, 0).vertex_count;
+    GET_ATLAS_BATCH(r, 0).vertex_data[GET_ATLAS_BATCH(r, 0).vertex_count++] = (Render_Vertex){centre, colour};
 
     float angle_step = 2.0f * M_PI / CIRCLE_LINE_SEGMENTS;
-    uint32_t ring_start = r->db->vertex_count;
+    uint32_t ring_start = GET_ATLAS_BATCH(r, 0).vertex_count;
 
     //Generating the vertices for the triangles that make up a circle
     for(int i = 0; i < CIRCLE_LINE_SEGMENTS; i++) {
@@ -560,7 +516,7 @@ void render_draw_circle(Renderer *r, NES_Vector2 centre, float radius, NES_Vecto
         float x = centre.x + cosf(angle) * radius;
         float y = centre.y - sinf(angle) * radius;
 
-        r->db->vertex_data[r->db->vertex_count++] = (Render_Vertex){(NES_Vector2){x, y}, colour};
+        GET_ATLAS_BATCH(r, 0).vertex_data[GET_ATLAS_BATCH(r, 0).vertex_count++] = (Render_Vertex){(NES_Vector2){x, y}, colour};
     }
 
     //Generating the indecies for the triangle ebo
@@ -568,9 +524,9 @@ void render_draw_circle(Renderer *r, NES_Vector2 centre, float radius, NES_Vecto
         uint32_t current = ring_start + i;
         uint32_t next = ring_start + ((i+1) % CIRCLE_LINE_SEGMENTS);
 
-        r->db->index_data[r->db->index_count++] = center_index;
-        r->db->index_data[r->db->index_count++] = current;
-        r->db->index_data[r->db->index_count++] = next;
+        GET_ATLAS_BATCH(r, 0).index_data[GET_ATLAS_BATCH(r, 0).index_count++] = center_index;
+        GET_ATLAS_BATCH(r, 0).index_data[GET_ATLAS_BATCH(r, 0).index_count++] = current;
+        GET_ATLAS_BATCH(r, 0).index_data[GET_ATLAS_BATCH(r, 0).index_count++] = next;
     }
 }
 

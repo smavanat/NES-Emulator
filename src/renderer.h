@@ -23,12 +23,13 @@ void pixelbuffer_free(PixelBuffer *pb);
 //Arbitrary constants for now
 #define MAX_TRIANGLES 2048
 #define MAX_QUADS 4096
+#define MAX_LAYERS 64
 
-#define VERTICES_PER_QUAD 4
-#define VERTICES_PER_TRIANGLE 3
+#define VERTICIES_PER_QUAD 4
+#define VERTICIES_PER_TRIANGLE 3
 #define INDECIES_PER_QUAD 6
 #define INDECIES_PER_TRIANGLE 3
-#define MAX_VERTICIES MAX_QUADS * VERTICES_PER_QUAD + MAX_TRIANGLES * VERTICES_PER_TRIANGLE
+#define MAX_VERTICIES MAX_QUADS * VERTICIES_PER_QUAD + MAX_TRIANGLES * VERTICIES_PER_TRIANGLE
 #define MAX_INDECIES MAX_QUADS * INDECIES_PER_QUAD + MAX_TRIANGLES * INDECIES_PER_TRIANGLE
 #define INVALID_TEX_INDEX 1248
 #define CIRCLE_LINE_SEGMENTS 64 //Number of line segments that make up the circumference of a circle
@@ -86,20 +87,10 @@ typedef struct {
     size_t index_count;
 } AtlasRenderBatch;
 
-typedef struct {
-    Render_Vertex *vertex_data;
-    uint32_t *index_data; //The index count (for ebo) for this renderer
-    size_t vertex_size;
-    size_t index_size;
-    size_t vertex_count;
-    size_t index_count;
-} DebugRenderBatch;
-
 //Pixel renderer that renders a single frame
 typedef struct {
     mat4 projection; //projection matrix for this renderer
     AtlasRenderBatch *rb;
-    DebugRenderBatch *db;
     uint32_t vao; //vao this renderer uses
     uint32_t vbo; //vbo this renderer uses
     uint32_t ebo; //ebo this renderer uses
