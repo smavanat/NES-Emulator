@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+//TODO: When spinning this out into its own library, need to add an arena to
+//      manage the total memory easily
 typedef float mat4[4][4];
 
 typedef struct {

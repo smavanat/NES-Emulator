@@ -16,12 +16,10 @@
 #include "ppu.h"
 #include "renderer.h"
 #include "bitmap_font.h"
+#include "clay_layout.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../externals/stb_image.h"
-
-#define CLAY_IMPLEMENTATION
-#include "../externals/clay.h"
 
 #define FRAME_RATE 1000 / 60.0f
 
@@ -32,6 +30,7 @@ uint8_t stop = 0;
 GLFWwindow *window;
 cpu c = {0};
 Renderer r = {0};
+mouse_state mstate = {0};
 
 //Thank you Bernardo: https://stackoverflow.com/questions/1157209/is-there-an-alternative-sleep-function-in-c-to-milliseconds
 #ifdef WIN32
@@ -220,6 +219,32 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     }
 }
 
+uint8_t cursor_in_bounds(mouse_state *state) {
+    if(state->mouse_pos.x < 0 || state->mouse_pos.x >= r.screen_width) return 0;
+    if(state->mouse_pos.y < 0 || state->mouse_pos.y >= r.screen_height) return 0;
+    return 1;
+}
+
+void cursor_callback(GLFWwindow *window, double xpos, double ypos) {
+    if(glfwGetWindowAttrib(window, GLFW_FOCUSED)) {
+        mstate.mouse_pos.x = xpos;
+        mstate.mouse_pos.y = ypos;
+    }
+}
+
+void mouse_callback(GLFWwindow *window, int key, int action, int mods) {
+    if(glfwGetWindowAttrib(window, GLFW_FOCUSED) && cursor_in_bounds(&mstate) && key < 3) {
+        if(key == GLFW_MOUSE_BUTTON_LEFT) mstate.mouse_down = (action == GLFW_PRESS);
+    }
+}
+
+void scroll_callback(GLFWwindow *window, double xoffset, double yoffset) {
+    if(glfwGetWindowAttrib(window, GLFW_FOCUSED)) {
+        mstate.scroll_pos.x = xoffset;
+        mstate.scroll_pos.y = yoffset;
+    }
+}
+
 //Function that initialises GLFW and glad
 int init(GLFWwindow **window) {
     //Initialising GLFW:
@@ -244,6 +269,9 @@ int init(GLFWwindow **window) {
     glfwMakeContextCurrent(*window);
     glfwSetFramebufferSizeCallback(*window, framebuffer_size_callback);
     glfwSetKeyCallback(*window, key_callback);
+    glfwSetMouseButtonCallback(*window, mouse_callback);
+    glfwSetCursorPosCallback(*window, cursor_callback);
+    glfwSetScrollCallback(*window, scroll_callback);
 
     //Loading GLAD
     if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -253,44 +281,6 @@ int init(GLFWwindow **window) {
     }
 
     return 1;
-}
-
-//Clay functionality
-const Clay_Color COLOUR_LIGHT = (Clay_Color){224, 215, 210, 255};
-const Clay_Color COLOUR_RED = (Clay_Color){168, 66, 28, 255};
-const Clay_Color COLOUR_ORANGE = (Clay_Color){255, 138, 50, 255};
-
-void HandleClayErrors(Clay_ErrorData errorData) {
-    //NOTE: See Clay_ErrorData struct for more info
-    printf("%s\n", errorData.errorText.chars);
-    switch (errorData.errorType) {
-        //TODO:
-    }
-}
-
-//Example measure text function
-static inline Clay_Dimensions MeasureText(Clay_StringSlice text, Clay_TextElementConfig *config, uintptr_t userData) {
-    //Clay_TextElementConfig contains members such as fontId, fontSize, letterSpacing
-    //Note: Clay_String->chars is not guaranteed to be null terminated
-    return (Clay_Dimensions){
-        .width = text.length * config->fontSize, //Only works for monospace fonts
-        .height = config->fontSize
-    };
-}
-
-//Layout config is just a struct that can be declared statically or inline
-Clay_ElementDeclaration sidebarItemConfig = (Clay_ElementDeclaration){
-    .layout = {
-        .sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_FIXED(50)}
-    },
-    .backgroundColor = COLOUR_ORANGE
-};
-
-//Reusable components are just normal functions
-void SidebarItemComponent(int index) {
-    CLAY(CLAY_IDI("Sidebar", index), sidebarItemConfig) {
-        //Children go here
-    }
 }
 
 uint32_t load_atlas(char *path, TextureAtlas *ta) {
@@ -305,7 +295,6 @@ uint32_t load_atlas(char *path, TextureAtlas *ta) {
     // load and generate the texture
     int width, height, nrChannels;
     unsigned char *data = stbi_load(path, &width, &height, &nrChannels, 0);
-    printf("width=%d height=%d channels=%d\n", width, height, nrChannels);
     if (data) {
         GLenum format;
         switch (nrChannels) {
@@ -328,17 +317,7 @@ uint32_t load_atlas(char *path, TextureAtlas *ta) {
     return 1;
 }
 
-Clay_Dimensions clay_measure_text_cb(Clay_StringSlice text, Clay_TextElementConfig *config, void *userData) {
-    //TODO: Figure out how to convert the config.fontSize variable to measure the scale of the lettering
-    NES_Vector2 res = bitmap_measure_text(text.chars, text.length, (NES_Vector2){config->letterSpacing, config->lineHeight}, (NES_Vector2){20, 20});
-
-    return (Clay_Dimensions){res.x, res.y};
-}
-
 int main(void) {
-    uint64_t totalMemorySize = Clay_MinMemorySize();
-    Clay_Arena arena = Clay_CreateArenaWithCapacityAndMemory(totalMemorySize, malloc(totalMemorySize));
-
     init(&window);
     r = render_init(INITIAL_SCREEN_WIDTH, INITIAL_SCREEN_HEIGHT); //Initialising the renderer
     TextureAtlas ta = {0};
@@ -348,8 +327,7 @@ int main(void) {
     Bitmap_Font_Desc bitmap = {0};
     bitmap_font_init(&bitmap, idx, ta.width, ta.height, 6, 10, 0, 0, 0, 0, BITMAP_CUSTOM, (union layout_desc){.custom_desc = {.data = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-=()[]{}<>/*:#%!?.,'\"@&$", .len = 87}});
 
-    Clay_Initialize(arena, (Clay_Dimensions){r.screen_width, r.screen_height}, (Clay_ErrorHandler){HandleClayErrors});
-    Clay_SetMeasureTextFunction(clay_measure_text_cb, NULL);
+    clay_init(&r);
 
     struct timeval stop, start; //Store the start and end times of a frame
     float dt = 0.0f; //Holds the time passed between frames
@@ -361,108 +339,13 @@ int main(void) {
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        //Update Clay internal layout dimensions to support resizing
-        Clay_SetLayoutDimensions((Clay_Dimensions){r.screen_width, r.screen_height});
-        //TODO:Update internal pointer position for handling mouseover/click/touch events
-        //Clay_SetPointerState((Clay_Vector2){mouseX, mouseY}, isMouseDown);
-        //Clay_UpdateScrollContainers(true, (Clay_Vector2){mouseWheelX, mouseWheelY}, dt);
-
-        // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
-        Clay_BeginLayout();
-
-        //Clay example UI with a fixed width sidebar and flexible width main content
-        CLAY(CLAY_ID("OuterContainer"), { .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 16},
-             .backgroundColor = {250, 250, 255, 255}}) {
-            CLAY(CLAY_ID("SideBar"), {
-                .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {.width = CLAY_SIZING_FIXED(300), .height = CLAY_SIZING_GROW(0)},
-                .padding = CLAY_PADDING_ALL(16), .childGap = 16}, .backgroundColor = COLOUR_LIGHT
-            }) {
-                CLAY(CLAY_ID("ProfilePictureOuter"), {.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 16,
-                .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}}, .backgroundColor = COLOUR_RED}) {
-                    CLAY_TEXT(CLAY_STRING("Clay - UI Library"), {.fontSize = 24, .textColor = {255, 255, 255, 255}});
-                }
-
-                // Standard C code like loops etc work inside components
-                for (int i = 0; i < 5; i++) {
-                    SidebarItemComponent(i);
-                }
-             }
-            CLAY(CLAY_ID("MainContent"), { .layout = { .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0) } }, .backgroundColor = COLOUR_LIGHT }) {}
-        }
-
-        // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
-        Clay_RenderCommandArray renderCommands = Clay_EndLayout(dt); // deltaTime is the time since the last frame, and is used for transitions
+        clay_update_dimensions(&r, &mstate, dt);
+        Clay_RenderCommandArray renderCommands = clay_set_layout(dt);
 
         render_begin(&r);
-            //TODO: Implement renderer that handles all of these rendering commands.
-            for(int i = 0; i < renderCommands.length; i++) {
-                Clay_RenderCommand *renderCommand = &renderCommands.internalArray[i];
-
-                switch(renderCommand->commandType) {
-                    // This command type should be skipped.
-                    case CLAY_RENDER_COMMAND_TYPE_NONE:
-                    break;
-                    // The renderer should draw a solid color rectangle.
-                    case CLAY_RENDER_COMMAND_TYPE_RECTANGLE:
-                        //TODO: Implement rounded corners
-                        render_draw_quad(&r, (NES_Quad){
-                            renderCommand->boundingBox.x,
-                            renderCommand->boundingBox.y,
-                            renderCommand->boundingBox.width,
-                            renderCommand->boundingBox.height,
-                        }, (NES_Vector4){
-                            renderCommand->renderData.rectangle.backgroundColor.r/255.0f,
-                            renderCommand->renderData.rectangle.backgroundColor.g/255.0f,
-                            renderCommand->renderData.rectangle.backgroundColor.b/255.0f,
-                            renderCommand->renderData.rectangle.backgroundColor.a/255.0f,
-                        }, 62);
-                        // printf("Colour %i: (%f, %f, %f, %f)\n", i, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r, renderCommand->renderData.rectangle.backgroundColor.r);
-                    break;
-                    // The renderer should draw a colored border inset into the bounding box.
-                    case CLAY_RENDER_COMMAND_TYPE_BORDER:
-                        printf("Border Rendering not currently implemented\n");
-                    break;
-                    // The renderer should draw text.
-                    case CLAY_RENDER_COMMAND_TYPE_TEXT: {
-                        Clay_TextRenderData data = renderCommand->renderData.text;
-                        bitmap_draw_string(&r, &bitmap, data.stringContents.chars, data.stringContents.length, (NES_Vector2) {data.letterSpacing, data.lineHeight},
-                                           (NES_Vector2){renderCommand->boundingBox.x, renderCommand->boundingBox.y}, (NES_Vector2){20,20},
-                                           (NES_Vector4) {
-                                                data.textColor.r/255.0f,
-                                                data.textColor.g/255.0f,
-                                                data.textColor.b/255.0f,
-                                                data.textColor.a/255.0f,
-                                           }, 63);
-                    }
-                        // printf("Text Rendering not currently implemented\n");
-                    break;
-                    // The renderer should draw an image.
-                    case CLAY_RENDER_COMMAND_TYPE_IMAGE:
-                        printf("Image Rendering not currently implemented\n");
-                    break;
-                    // The renderer should begin clipping all future draw commands, only rendering content that falls within the provided boundingBox.
-                    case CLAY_RENDER_COMMAND_TYPE_SCISSOR_START:
-                        printf("Clipping not currently implemented\n");
-                    break;
-                    // The renderer should finish any previously active clipping, and begin rendering elements in full again.
-                    case CLAY_RENDER_COMMAND_TYPE_SCISSOR_END:
-                        printf("Clipping not currently implemented\n");
-                    break;
-                    // The renderer should begin performing a "color overlay" on all subsequent render commands until disabled again.
-                    case CLAY_RENDER_COMMAND_TYPE_OVERLAY_COLOR_START:
-                        printf("Colour Overlay not currently implemented\n");
-                    break;
-                    // The renderer should disable any previously active "color overlay" and render elements with their standard colors again.
-                    case CLAY_RENDER_COMMAND_TYPE_OVERLAY_COLOR_END:
-                        printf("Colour Overlay not currently implemented\n");
-                    break;
-                    // The renderer should provide a custom implementation for handling this render command based on its .customData
-                    case CLAY_RENDER_COMMAND_TYPE_CUSTOM:
-                        printf("Custom Rendering not currently implemented\n");
-                    break;
-                }
-            }
+            clay_render(&r, &bitmap, renderCommands);
         render_end(&r);
+
         glfwSwapBuffers(window);
         glfwPollEvents();
         gettimeofday(&stop, NULL); //Get the time at the end of the frame

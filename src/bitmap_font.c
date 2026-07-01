@@ -34,6 +34,11 @@ void bitmap_font_free(Bitmap_Font_Desc *bf) {
 }
 
 uint8_t bitmap_draw_char(Renderer *r, Bitmap_Font_Desc *bf, char c, NES_Quad dimensions, NES_Vector4 colour, uint8_t layer) {
+    if(layer >= MAX_LAYERS) {
+        fprintf(stderr, "Invalid layer index\n");
+        return 0;
+    }
+
     if(c < 32 || c > 126) {
         fprintf(stderr, "Trying to draw a non-ASCII character\n");
         return 0;
@@ -89,6 +94,11 @@ uint8_t bitmap_draw_char(Renderer *r, Bitmap_Font_Desc *bf, char c, NES_Quad dim
 }
 
 uint8_t bitmap_draw_string(Renderer *r, Bitmap_Font_Desc *bf, const char *str, size_t str_len, NES_Vector2 gap, NES_Vector2 start, NES_Vector2 scale, NES_Vector4 colour, uint8_t layer) {
+    if(layer >= MAX_LAYERS) {
+        fprintf(stderr, "Invalid layer index\n");
+        return 0;
+    }
+
     float x = start.x;
     float y = start.y;
 

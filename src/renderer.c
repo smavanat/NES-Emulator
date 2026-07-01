@@ -241,6 +241,11 @@ uint32_t add_texture_atlas(Renderer *r, TextureAtlas *ta) {
 
 //Draws a texture quad
 void render_draw_atlas_quad(Renderer *r, NES_Quad screen_quad, NES_Quad tex_sub_rect, NES_Vector4 colour, uint32_t atlas, uint8_t layer) {
+    if(layer >= MAX_LAYERS) {
+        fprintf(stderr, "Invalid layer index\n");
+        return;
+    }
+
     //If we have overreached our current rendering limit or we cannot store any more textures, end the current draw call and start a new one
     if(GET_ATLAS_BATCH(r, layer, atlas).vertex_count + VERTICIES_PER_QUAD >= GET_ATLAS_BATCH(r, layer, atlas).vertex_size || GET_ATLAS_BATCH(r, layer, atlas).index_count + INDECIES_PER_QUAD >= GET_ATLAS_BATCH(r, layer, atlas).index_size) {
         render_next_atlas_batch(r, layer, atlas);
@@ -450,6 +455,16 @@ NES_Quad atlas_pack(TextureAtlas *a, uint8_t* pixels, size_t w, size_t h, uint8_
 }
 
 void draw_triangle_strip(Renderer *r, NES_Vector2 strip[4], NES_Vector4 colour, uint8_t layer) {
+    if(layer >= MAX_LAYERS) {
+        fprintf(stderr, "Invalid layer index\n");
+        return;
+    }
+
+    if(layer >= MAX_LAYERS) {
+        fprintf(stderr, "Invalid layer index\n");
+        return;
+    }
+
     if(GET_ATLAS_BATCH(r, layer, 0).vertex_count + VERTICIES_PER_QUAD >= GET_ATLAS_BATCH(r, layer, 0).vertex_size || GET_ATLAS_BATCH(r, layer, 0).index_count + INDECIES_PER_QUAD >= GET_ATLAS_BATCH(r, layer, 0).index_size) {
         render_next_atlas_batch(r, layer, 0);
     }
@@ -458,7 +473,7 @@ void draw_triangle_strip(Renderer *r, NES_Vector2 strip[4], NES_Vector4 colour, 
     uint32_t base_index = GET_ATLAS_BATCH(r, layer, 0).vertex_count;
 
     //Update the earliest atlas used
-    if(r->layers[layer].earliest_atlas_used < 0)
+    if(r->layers[layer].earliest_atlas_used != 0)
         r->layers[layer].earliest_atlas_used = 0;
 
     //Lazy allocation of memory
@@ -485,6 +500,11 @@ void draw_triangle_strip(Renderer *r, NES_Vector2 strip[4], NES_Vector4 colour, 
 
 
 void render_draw_line(Renderer *r, NES_Vector2 start_pos, NES_Vector2 end_pos, float thickness, NES_Vector4 colour, uint8_t layer) {
+    if(layer >= MAX_LAYERS) {
+        fprintf(stderr, "Invalid layer index\n");
+        return;
+    }
+
     NES_Vector2 delta = {end_pos.x - start_pos.x, end_pos.y - start_pos.y};
     float length = sqrtf(delta.x*delta.x + delta.y*delta.y);
 
@@ -504,6 +524,11 @@ void render_draw_line(Renderer *r, NES_Vector2 start_pos, NES_Vector2 end_pos, f
 }
 
 void render_draw_quad(Renderer *r, NES_Quad quad, NES_Vector4 colour, uint8_t layer) {
+    if(layer >= MAX_LAYERS) {
+        fprintf(stderr, "Invalid layer index\n");
+        return;
+    }
+
     NES_Vector2 strip[4] = {
         {quad.x, quad.y},
         {quad.x, quad.y+quad.h},
@@ -515,11 +540,21 @@ void render_draw_quad(Renderer *r, NES_Quad quad, NES_Vector4 colour, uint8_t la
 }
 
 void render_draw_quad_bordered(Renderer *r, NES_Quad quad, NES_Vector4 q_col, NES_Vector4 b_col, float thick, uint8_t layer) {
+    if(layer >= MAX_LAYERS) {
+        fprintf(stderr, "Invalid layer index\n");
+        return;
+    }
+
     render_draw_quad(r, quad, q_col, layer);
     render_draw_unfilled_quad(r, quad, thick, b_col, layer);
 }
 
 void render_draw_unfilled_quad(Renderer *r, NES_Quad quad, float thickness, NES_Vector4 colour, uint8_t layer) {
+    if(layer >= MAX_LAYERS) {
+        fprintf(stderr, "Invalid layer index\n");
+        return;
+    }
+
     NES_Vector2 tl = {quad.x,          quad.y};
     NES_Vector2 tr = {quad.x + quad.w, quad.y};
     NES_Vector2 bl = {quad.x,          quad.y + quad.h};
@@ -532,6 +567,11 @@ void render_draw_unfilled_quad(Renderer *r, NES_Quad quad, float thickness, NES_
 }
 
 void render_draw_circle(Renderer *r, NES_Vector2 centre, float radius, NES_Vector4 colour, uint8_t layer) {
+    if(layer >= MAX_LAYERS) {
+        fprintf(stderr, "Invalid layer index\n");
+        return;
+    }
+
     //TODO:Change this so we at least draw some of the triangles this batch and the rest in the next one
     if(GET_ATLAS_BATCH(r, layer, 0).vertex_count + CIRCLE_LINE_SEGMENTS + 1 >= INITIAL_VERTEX_CAPACITY || GET_ATLAS_BATCH(r, layer, 0).index_count + (CIRCLE_LINE_SEGMENTS * 3) >= INITIAL_INDEX_CAPACITY) {
         render_next_atlas_batch(r, layer, 0);
@@ -540,7 +580,7 @@ void render_draw_circle(Renderer *r, NES_Vector2 centre, float radius, NES_Vecto
     uint32_t center_index = GET_ATLAS_BATCH(r, layer, 0).vertex_count;
 
     //Update the earliest atlas used
-    if(r->layers[layer].earliest_atlas_used < 0)
+    if(r->layers[layer].earliest_atlas_used != 0)
         r->layers[layer].earliest_atlas_used = 0;
 
     //Lazy allocation of memory
