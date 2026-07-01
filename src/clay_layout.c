@@ -1,5 +1,6 @@
 //Implementation of helper functions and a layout in clay
 #include "clay_layout.h"
+#include <stdint.h>
 #include <stdio.h>
 #include "renderer.h"
 #include "bitmap_font.h"
@@ -7,7 +8,8 @@
 #define CLAY_IMPLEMENTATION
 #include "../externals/clay.h"
 
-//Clay functionality
+//Clay Colours to be reused
+const Clay_Color COLOUR_WHITE = (Clay_Color){255, 255, 255, 255};
 const Clay_Color COLOUR_LIGHT = (Clay_Color){224, 215, 210, 255};
 const Clay_Color COLOUR_RED = (Clay_Color){168, 66, 28, 255};
 const Clay_Color COLOUR_ORANGE = (Clay_Color){255, 138, 50, 255};
@@ -45,9 +47,27 @@ void SidebarItemComponent(int index) {
     }
 }
 
+//Generates a reusable button component
+void ButtonComponent(int id, Clay_Color basic_color, Clay_Color hover_color, uint16_t minX, uint16_t minY, uint16_t maxX, uint16_t maxY,
+                     Clay_String hover_string, Clay_String regular_string, void (*button_hander)(Clay_ElementId id, Clay_PointerData info, void *userData),
+                     void *userData, uint8_t padding, Clay_TextAlignment align) {
+    CLAY(CLAY_IDI("Button", id), {.layout = {.sizing = {CLAY_SIZING_GROW(minX, maxX), CLAY_SIZING_GROW(minY, maxY)},
+        .padding = CLAY_PADDING_ALL(padding)}, .backgroundColor = Clay_Hovered() ? hover_color : basic_color}) {
+        Clay_OnHover(button_hander, userData);
+        bool buttonHovered = Clay_Hovered();
+
+        CLAY_TEXT(buttonHovered ? hover_string : regular_string, {.textColor = COLOUR_WHITE, .textAlignment = align});
+    }
+}
+
+void HandleButtonInteraction(Clay_ElementId elementId, Clay_PointerData pointerInfo, void *userData) {
+    if(pointerInfo.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME)
+        printf("Button Clicked\n");
+}
+
 Clay_Dimensions clay_measure_text_cb(Clay_StringSlice text, Clay_TextElementConfig *config, void *userData) {
-    //TODO: Figure out how to convert the config.fontSize variable to measure the scale of the lettering
-    NES_Vector2 res = bitmap_measure_text(text.chars, text.length, (NES_Vector2){config->letterSpacing, config->lineHeight}, (NES_Vector2){20, 20});
+    uint16_t fontSize = (config->fontSize > 0) ? config->fontSize : 20;
+    NES_Vector2 res = bitmap_measure_text(text.chars, text.length, (NES_Vector2){config->letterSpacing, config->lineHeight}, (NES_Vector2){0.6 * fontSize, 1 * fontSize});
 
     return (Clay_Dimensions){res.x, res.y};
 }
@@ -71,26 +91,45 @@ Clay_RenderCommandArray clay_set_layout(float dt) {
     // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
     Clay_BeginLayout();
 
-    //Clay example UI with a fixed width sidebar and flexible width main content
-    CLAY(CLAY_ID("OuterContainer"), { .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 16},
-         .backgroundColor = {250, 250, 255, 255}}) {
-        CLAY(CLAY_ID("SideBar"), {
-            .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {.width = CLAY_SIZING_FIXED(300), .height = CLAY_SIZING_GROW(0)},
-            .padding = CLAY_PADDING_ALL(16), .childGap = 16}, .backgroundColor = COLOUR_LIGHT
-        }) {
-            CLAY(CLAY_ID("ProfilePictureOuter"), {.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 16,
-            .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}}, .backgroundColor = COLOUR_RED}) {
-                CLAY_TEXT(CLAY_STRING("Clay - UI Library"), {.fontSize = 24, .textColor = {255, 255, 255, 255}});
+    CLAY(CLAY_ID("OuterContainer"), { .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 8}, .backgroundColor = {250, 250, 255, 255}}) {
+        CLAY(CLAY_ID("Buttons"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(32)}, .childGap = 16, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
+            CLAY(CLAY_ID("ButtonContainer"), { .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 4, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
+                ButtonComponent(2, COLOUR_RED, COLOUR_ORANGE, 32, 40, 100, 40, CLAY_STRING("Pause"), CLAY_STRING("Pause"), HandleButtonInteraction, NULL, 10, CLAY_TEXT_ALIGN_CENTER);
+                ButtonComponent(3, COLOUR_RED, COLOUR_ORANGE, 32, 40, 100, 40, CLAY_STRING("Play"), CLAY_STRING("Play"), HandleButtonInteraction, NULL, 10, CLAY_TEXT_ALIGN_CENTER);
+                ButtonComponent(4, COLOUR_RED, COLOUR_ORANGE, 32, 40, 100, 40, CLAY_STRING("Stop"), CLAY_STRING("Stop"), HandleButtonInteraction, NULL, 10, CLAY_TEXT_ALIGN_CENTER);
             }
+        }
+        CLAY(CLAY_ID("Main_Content"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 8}}) {
+            CLAY(CLAY_ID("CPU_Sidebar"), {
+                .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {.width = CLAY_SIZING_GROW(200, 400), .height = CLAY_SIZING_GROW(0)},
+                .padding = CLAY_PADDING_ALL(16), .childGap = 16}, .backgroundColor = COLOUR_LIGHT
+            }) {
+                CLAY(CLAY_ID("ProfilePictureOuter"), {.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 16,
+                .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}}, .backgroundColor = COLOUR_RED}) {
+                    CLAY_TEXT(CLAY_STRING("Clay - UI Library"), {.fontSize = 24, .textColor = COLOUR_WHITE});
+                }
 
-            // Standard C code like loops etc work inside components
-            for (int i = 0; i < 5; i++) {
-                SidebarItemComponent(i);
+                // Standard C code like loops etc work inside components
+                for (int i = 0; i < 5; i++) {
+                    SidebarItemComponent(i);
+                }
+                ButtonComponent(1, COLOUR_RED, COLOUR_ORANGE, 100, 50, 400, 50, CLAY_STRING("Hovered!"), CLAY_STRING("Hover me"), HandleButtonInteraction, NULL, 16, CLAY_TEXT_ALIGN_LEFT);
+             }
+            CLAY(CLAY_ID("MainContent"), { .layout = { .layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = { .width = CLAY_SIZING_GROW(300), .height = CLAY_SIZING_GROW(0) },
+                .childGap = 8}}) {
+                CLAY(CLAY_ID("Top"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 8, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
+                    CLAY(CLAY_ID("Disassembly"), {.layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_GROW(0)}}, .backgroundColor = COLOUR_LIGHT}) {}
+                    CLAY(CLAY_ID("Game"), {.layout = {.sizing = {CLAY_SIZING_GROW(256, 512), CLAY_SIZING_GROW(240, 480)}}, .backgroundColor = COLOUR_LIGHT}) {}
+                    CLAY(CLAY_ID("Undefined"), {.layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_GROW(0)}}, .backgroundColor = COLOUR_LIGHT}) {}
+                }
+                CLAY(CLAY_ID("ROM"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}}, .backgroundColor = COLOUR_LIGHT}) {}
             }
-         }
-        CLAY(CLAY_ID("MainContent"), { .layout = { .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0) } }, .backgroundColor = COLOUR_LIGHT }) {}
+            CLAY(CLAY_ID("PPU_Sidebar"), {
+                .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {.width = CLAY_SIZING_GROW(200, 400), .height = CLAY_SIZING_GROW(0)},
+                .padding = CLAY_PADDING_ALL(16), .childGap = 16}, .backgroundColor = COLOUR_LIGHT
+            }) {}
+        }
     }
-
     // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
     return Clay_EndLayout(dt); // deltaTime is the time since the last frame, and is used for transitions
 }
@@ -126,8 +165,9 @@ void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray 
             // The renderer should draw text.
             case CLAY_RENDER_COMMAND_TYPE_TEXT: {
                 Clay_TextRenderData data = renderCommand->renderData.text;
+                uint16_t fontSize = (data.fontSize > 0) ? data.fontSize : 20;
                 bitmap_draw_string(r, bitmap, data.stringContents.chars, data.stringContents.length, (NES_Vector2) {data.letterSpacing, data.lineHeight},
-                                   (NES_Vector2){renderCommand->boundingBox.x, renderCommand->boundingBox.y}, (NES_Vector2){20,20},
+                                   (NES_Vector2){renderCommand->boundingBox.x, renderCommand->boundingBox.y}, (NES_Vector2){0.6 * fontSize, 1 * fontSize},
                                    (NES_Vector4) {
                                         data.textColor.r/255.0f,
                                         data.textColor.g/255.0f,
