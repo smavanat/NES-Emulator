@@ -13,6 +13,7 @@ typedef struct {
 void clay_init(Renderer *r);
 void clay_update_dimensions(Renderer *r, mouse_state *mstate, float dt);
 Clay_RenderCommandArray clay_set_layout(float dt);
-void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray renderCommands);
+// void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray renderCommands);
+void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray renderCommands, uint8_t *data, PixelBuffer *pb);
 
 #endif //__CLAY_LAYOUT_H__

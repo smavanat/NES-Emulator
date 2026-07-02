@@ -87,8 +87,19 @@ typedef struct {
     size_t index_count;
 } AtlasRenderBatch;
 
+//Struct for renderering one off textures
+typedef struct {
+    uint32_t texture;
+    NES_Quad dimensions;
+    NES_Quad uv;
+    NES_Vector4 colour;
+} DynamicTexture;
+
 typedef struct {
     AtlasRenderBatch *atlas_batches;
+    DynamicTexture *dynamic_textures;
+    size_t dynamic_texture_count;
+    size_t dynamic_texture_capacity;
     int earliest_atlas_used; //If negative, this layer is not used, otherwise is the index of the earliest atlas used
 } Render_Layer;
 
@@ -125,12 +136,11 @@ uint32_t add_texture_atlas(Renderer *r, TextureAtlas *ta);
 //Draws a quad
 void render_draw_atlas_quad(Renderer *r, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour, uint32_t atlas, uint8_t layer);
 //Draws a dynamically allocated texture
-void render_draw_texture(Renderer *r, uint32_t texture, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour);
+void render_draw_texture(Renderer *r, uint32_t texture, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour, uint8_t layer);
 //Draws a frame straight to a texture by uploading it to a pixel buffer
 void pixelbuffer_updload_data(PixelBuffer *pb, uint8_t *data);
 //Draws a pixel buffer
-//TODO: Figure out how to add a layering system to drawing pixelbuffers/dynamic textures in general
-void render_draw_pixel_buffer(Renderer *r, PixelBuffer *pb);
+void render_draw_pixel_buffer(Renderer *r, PixelBuffer *pb, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour, uint8_t layer);
 //Draws a filled circle
 void render_draw_circle(Renderer *r, NES_Vector2 centre, float radius, NES_Vector4 colour, uint8_t layer);
 //Draws a filled quad

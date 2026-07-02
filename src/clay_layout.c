@@ -60,6 +60,17 @@ void ButtonComponent(int id, Clay_Color basic_color, Clay_Color hover_color, uin
     }
 }
 
+typedef void (*render_func)(Clay_String str, Renderer *r, PixelBuffer *pb, uint8_t *data);
+void render_game(Clay_String str, Renderer *r, PixelBuffer *pb, uint8_t *data) {
+    Clay_ElementId gId = Clay_GetElementId(str);
+    Clay_ElementData gData = Clay_GetElementData(gId);
+
+    NES_Quad dimensions = {gData.boundingBox.x, gData.boundingBox.y, gData.boundingBox.width, gData.boundingBox.height};
+
+    pixelbuffer_updload_data(pb, data);
+    render_draw_pixel_buffer(r, pb, dimensions, (NES_Quad){0,0,1,1}, (NES_Vector4){1,1,1,1}, 10);
+}
+
 void HandleButtonInteraction(Clay_ElementId elementId, Clay_PointerData pointerInfo, void *userData) {
     if(pointerInfo.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME)
         printf("Button Clicked\n");
@@ -119,7 +130,9 @@ Clay_RenderCommandArray clay_set_layout(float dt) {
                 .childGap = 8}}) {
                 CLAY(CLAY_ID("Top"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 8, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
                     CLAY(CLAY_ID("Disassembly"), {.layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_GROW(0)}}, .backgroundColor = COLOUR_LIGHT}) {}
-                    CLAY(CLAY_ID("Game"), {.layout = {.sizing = {CLAY_SIZING_GROW(256, 512), CLAY_SIZING_GROW(240, 480)}}, .backgroundColor = COLOUR_LIGHT}) {}
+                    CLAY(CLAY_ID("Game"), {.layout = {.sizing = {CLAY_SIZING_GROW(256, 512), CLAY_SIZING_GROW(240, 480)}}, .backgroundColor = COLOUR_LIGHT}) {
+                            CLAY(CLAY_ID("Frame"), {.custom = {.customData = render_game}}) {}
+                        }
                     CLAY(CLAY_ID("Undefined"), {.layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_GROW(0)}}, .backgroundColor = COLOUR_LIGHT}) {}
                 }
                 CLAY(CLAY_ID("ROM"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}}, .backgroundColor = COLOUR_LIGHT}) {}
@@ -134,7 +147,7 @@ Clay_RenderCommandArray clay_set_layout(float dt) {
     return Clay_EndLayout(dt); // deltaTime is the time since the last frame, and is used for transitions
 }
 
-void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray renderCommands) {
+void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray renderCommands, uint8_t *data, PixelBuffer *pb) {
     //TODO: Implement renderer that handles all of these rendering commands.
     for(int i = 0; i < renderCommands.length; i++) {
         Clay_RenderCommand *renderCommand = &renderCommands.internalArray[i];
@@ -156,7 +169,7 @@ void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray 
                     renderCommand->renderData.rectangle.backgroundColor.g/255.0f,
                     renderCommand->renderData.rectangle.backgroundColor.b/255.0f,
                     renderCommand->renderData.rectangle.backgroundColor.a/255.0f,
-                }, 62);
+                }, 9);
             break;
             // The renderer should draw a colored border inset into the bounding box.
             case CLAY_RENDER_COMMAND_TYPE_BORDER:
@@ -173,7 +186,7 @@ void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray 
                                         data.textColor.g/255.0f,
                                         data.textColor.b/255.0f,
                                         data.textColor.a/255.0f,
-                                   }, 63);
+                                   }, 10);
             }
             break;
             // The renderer should draw an image.
@@ -197,8 +210,11 @@ void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray 
                 printf("Colour Overlay not currently implemented\n");
             break;
             // The renderer should provide a custom implementation for handling this render command based on its .customData
-            case CLAY_RENDER_COMMAND_TYPE_CUSTOM:
-                printf("Custom Rendering not currently implemented\n");
+            case CLAY_RENDER_COMMAND_TYPE_CUSTOM: {
+                render_func rf = (render_func)renderCommand->renderData.custom.customData;
+                rf(CLAY_STRING("Game"), r, pb, data);
+            }
+                // printf("Custom Rendering not currently implemented\n");
             break;
         }
     }

@@ -1,4 +1,5 @@
 #include "renderer.h"
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -121,6 +122,9 @@ Renderer render_init(size_t width, size_t height) {
     for(int i = 0; i < MAX_LAYERS; i++) {
         r.layers[i].atlas_batches = calloc(r.atlas_batch_capacity, sizeof(AtlasRenderBatch));
         r.layers[i].earliest_atlas_used = -1;
+        r.layers[i].dynamic_texture_capacity = 8;
+        r.layers[i].dynamic_textures = NULL;
+        r.layers[i].dynamic_texture_count = 0;
     }
 
     //Make the special debug atlas as the first one
@@ -147,6 +151,7 @@ void render_free(Renderer *r) {
         }
         if(i == 0) free(GET_ATLAS_BATCH(r, i, 0).a);
         if(r->layers[i].atlas_batches) free(r->layers[i].atlas_batches);
+        if(r->layers[i].dynamic_textures) free(r->layers[i].dynamic_textures);
     }
 }
 
@@ -157,6 +162,8 @@ void render_begin(Renderer *r) {
             GET_ATLAS_BATCH(r, i, j).index_count = 0;
             GET_ATLAS_BATCH(r, i, j).vertex_count = 0;
         }
+        r->layers[i].dynamic_texture_count = 0;
+        r->layers[i].earliest_atlas_used = -1;
     }
 }
 
@@ -164,7 +171,7 @@ void render_begin(Renderer *r) {
 void render_end(Renderer *r) {
     //Shifting the positions according to the projection matrix
     glUseProgram(r->shader);
-    int proj_loc = glGetUniformLocation(r->shader, "uProjection");
+    int  proj_loc = glGetUniformLocation(r->shader, "uProjection");
     glUniformMatrix4fv(proj_loc, 1, GL_FALSE, (float *)r->projection);
 
     //Bind all of the arrays and buffers we will reuse over time
@@ -173,6 +180,28 @@ void render_end(Renderer *r) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, r->ebo);
 
     for(int i = 0; i < MAX_LAYERS; i++) {
+        for(int j = 0; j < r->layers[i].dynamic_texture_count; j++) {
+            DynamicTexture tex = r->layers[i].dynamic_textures[j];
+
+            // Bind the texture
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, tex.texture);
+            glUniform1i(glGetUniformLocation(r->shader, "screenTexture"), 0);
+
+            // Build a single quad directly into a temporary buffer
+            Render_Vertex verts[4] = {
+                {{tex.dimensions.x, tex.dimensions.y}, tex.colour, {tex.uv.x, tex.uv.y}},
+                {{tex.dimensions.x, tex.dimensions.y + tex.dimensions.h}, tex.colour, {tex.uv.x, tex.uv.y+tex.uv.h}},
+                {{tex.dimensions.x + tex.dimensions.w, tex.dimensions.y + tex.dimensions.h}, tex.colour, {tex.uv.x + tex.uv.w, tex.uv.y + tex.uv.h}},
+                {{tex.dimensions.x + tex.dimensions.w, tex.dimensions.y}, tex.colour, {tex.uv.x + tex.uv.w, tex.uv.y}},
+            };
+            uint32_t indices[] = { 0, 1, 3, 1, 2, 3 };
+
+            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(verts), verts);
+            glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(indices), indices);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        }
+
         if(r->layers[i].earliest_atlas_used < 0) continue;
         for(int j = r->layers[i].earliest_atlas_used; j < r->num_atlas_batches; j++) {
             //TODO: Check if not redefining the buffer sizes using glBufferData
@@ -297,39 +326,31 @@ void render_draw_atlas_quad(Renderer *r, NES_Quad screen_quad, NES_Quad tex_sub_
     GET_ATLAS_BATCH(r, layer, atlas).index_data[GET_ATLAS_BATCH(r, layer, atlas).index_count++] = base_index + 3;
 }
 
-void render_draw_texture(Renderer *r, uint32_t texture, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour) {
-    glUseProgram(r->shader);
+void render_draw_texture(Renderer *r, uint32_t texture, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour, uint8_t layer) {
+    if(layer >= MAX_LAYERS) {
+        fprintf(stderr, "Invalid layer index\n");
+        return;
+    }
 
-    // Upload projection
-    int proj_loc = glGetUniformLocation(r->shader, "uProjection");
-    glUniformMatrix4fv(proj_loc, 1, GL_FALSE, (float *)r->projection);
+    //Lazy initialisation
+    if(r->layers[layer].dynamic_textures == NULL) {
+        r->layers[layer].dynamic_textures = malloc(r->layers[layer].dynamic_texture_capacity * sizeof(DynamicTexture));
+    }
 
-    // Bind the texture
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glUniform1i(glGetUniformLocation(r->shader, "screenTexture"), 0);
-    glUniform1i(glGetUniformLocation(r->shader, "useTexture"), 1);
+    if(r->layers[layer].dynamic_texture_count >= r->layers[layer].dynamic_texture_capacity) {
+        size_t new_cap = r->layers[layer].dynamic_texture_capacity * 2;
+        DynamicTexture *temp = malloc(new_cap * sizeof(DynamicTexture));
+        memcpy(temp, r->layers[layer].dynamic_textures, r->layers[layer].dynamic_texture_capacity * sizeof(DynamicTexture));
+        free(r->layers[layer].dynamic_textures);
+        r->layers[layer].dynamic_textures = temp;
+        r->layers[layer].dynamic_texture_capacity = new_cap;
+    }
 
-    // Build a single quad directly into a temporary buffer
-    Render_Vertex verts[4] = {
-        {{dimensions.x,                 dimensions.y               }, colour, {0, 0}},
-        {{dimensions.x,                 dimensions.y + dimensions.h}, colour, {0, 1}},
-        {{dimensions.x + dimensions.w,  dimensions.y + dimensions.h}, colour, {1, 1}},
-        {{dimensions.x + dimensions.w,  dimensions.y               }, colour, {1, 0}},
-    };
-    uint32_t indices[] = { 0, 1, 3, 1, 2, 3 };
-
-    glBindVertexArray(r->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, r->vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(verts), verts);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, r->ebo);
-    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(indices), indices);
-
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    r->layers[layer].dynamic_textures[r->layers[layer].dynamic_texture_count++] = (DynamicTexture){texture, dimensions, uv_dimensions, colour};
 }
 
-void render_draw_pixel_buffer(Renderer *r, PixelBuffer *pb) {
-    render_draw_texture(r, pb->pixel_tex, (NES_Quad){0,0,r->screen_width, r->screen_height}, (NES_Quad){0,0,1,1}, (NES_Vector4) {1,1,1,1});
+void render_draw_pixel_buffer(Renderer *r, PixelBuffer *pb, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour, uint8_t layer) {
+    render_draw_texture(r, pb->pixel_tex, dimensions, uv_dimensions, colour, layer);
 }
 
 //Creates a pixel buffer to hold the pixels representing

@@ -318,48 +318,193 @@ uint32_t load_atlas(char *path, TextureAtlas *ta) {
 }
 
 int main(void) {
-    init(&window);
-    r = render_init(INITIAL_SCREEN_WIDTH, INITIAL_SCREEN_HEIGHT); //Initialising the renderer
-    TextureAtlas ta = {0};
-    load_atlas("../minogram_6x10.png", &ta); //This bitmap png is from: https://frostyfreeze.itch.io/pixel-bitmap-fonts-png-xml
-    uint32_t idx = add_texture_atlas(&r, &ta);
+    //Initialising pc
+    c.sp = 0xFF; //Setting stack pointer to top of stack
+    c.proc_stat_reg = 0x34; //Setting BREAK and UNUSED flags
 
-    Bitmap_Font_Desc bitmap = {0};
-    bitmap_font_init(&bitmap, idx, ta.width, ta.height, 6, 10, 0, 0, 0, 0, BITMAP_CUSTOM, (union layout_desc){.custom_desc = {.data = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-=()[]{}<>/*:#%!?.,'\"@&$", .len = 87}});
-
-    clay_init(&r);
-
-    struct timeval stop, start; //Store the start and end times of a frame
-    float dt = 0.0f; //Holds the time passed between frames
-
-    while(!glfwWindowShouldClose(window)) {
-        gettimeofday(&start, NULL); //Getting time at start of frame
-
-        //Clear the screen
-        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        clay_update_dimensions(&r, &mstate, dt);
-        Clay_RenderCommandArray renderCommands = clay_set_layout(dt);
-
-        render_begin(&r);
-            clay_render(&r, &bitmap, renderCommands);
-        render_end(&r);
-
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-        gettimeofday(&stop, NULL); //Get the time at the end of the frame
-        dt = (stop.tv_sec - start.tv_sec) * 1000 + (stop.tv_usec - start.tv_usec) / 1000.0f; //Get the frame length
-        // If the frame took less time than the set frame rate, wait until the time is the frame rate
-        if(dt < FRAME_RATE) {
-            sleep_ms((int)FRAME_RATE - dt);
-            dt = FRAME_RATE;
-        }
+    //Reading the data from a ROM
+    //TODO: Make the rom path user inputable
+    uint8_t *buf;
+    int sz = read_to_end("../roms/zelda.nes", &buf, 0);
+    if(sz < 0) {
+        fprintf(stderr, "Error when opening a file\n");
+        return 0;
     }
-    glfwTerminate();
-    bitmap_font_free(&bitmap);
-    atlas_free(&ta);
-    render_free(&r);
+
+    if(init(&window)) {
+        printf("Initialised\n");
+
+        r = render_init(INITIAL_SCREEN_WIDTH, INITIAL_SCREEN_HEIGHT); //Initialising the renderer
+        TextureAtlas ta = {0};
+        load_atlas("../minogram_6x10.png", &ta); //This bitmap png is from: https://frostyfreeze.itch.io/pixel-bitmap-fonts-png-xml
+        uint32_t idx = add_texture_atlas(&r, &ta);
+
+        Bitmap_Font_Desc bitmap = {0};
+        bitmap_font_init(&bitmap, idx, ta.width, ta.height, 6, 10, 0, 0, 0, 0, BITMAP_CUSTOM, (union layout_desc){.custom_desc = {.data = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-=()[]{}<>/*:#%!?.,'\"@&$", .len = 87}});
+
+        c.b = calloc(1, sizeof(bus));
+        c.b->rom = calloc(1, sizeof(rom));
+        c.b->p = calloc(1, sizeof(ppu));
+        c.b->p->addr_reg = calloc(1, sizeof(addr_register));
+        c.b->p->addr_reg->h_ptr = 1;
+        c.b->p->scroll_reg = calloc(1, sizeof(scroll_register));
+        c.b->p->scroll_reg->s_ptr = 1;
+        c.b->player_1 = calloc(1, sizeof(joypad));
+        c.b->player_2 = calloc(1, sizeof(joypad));
+
+        clay_init(&r);
+
+        struct timeval stop, start; //Store the start and end times of a frame
+        float dt = 0.0f; //Holds the time passed between frames
+
+        if(!rom_load(c.b->rom, buf, sz)) { //Loading the rom into memory
+            printf("Loaded\n");
+            free(buf);
+            buf = NULL;
+
+            //Some debug functions
+            //TODO: Write a proper debugger and get rid of this
+            printf("PRG ROM size: %zu\n", c.b->rom->prg_rom_sz);
+            printf("CHR ROM size: %zu\n", c.b->rom->chr_rom_sz);
+            printf("CHR RAM size: %zu\n", c.b->rom->chr_ram_sz);
+            printf("Mapper: %u\n", c.b->rom->mapper);
+            printf("Initial control reg: %02X\n", c.b->rom->mapper_registers[0]);
+            // Manually read the reset vector bytes through the mapper
+            uint8_t lo = c.b->rom->cpu_read(c.b->rom, 0xFFFC);
+            uint8_t hi = c.b->rom->cpu_read(c.b->rom, 0xFFFD);
+            printf("Raw reset vector bytes: %02X %02X\n", lo, hi);
+            printf("Expected reset vector: %04X\n", (hi << 8) | lo);
+
+            set_pc(&c, 0xFFFC); //Resetting the pc
+            printf("Reset vector: %04X\n", c.pc);
+
+            //Setting the ppu's reference to the ROM to the bus's ROM
+            c.b->p->rom = c.b->rom;
+
+            //Doubling buffering the screen
+            frame tile_frame[2] = {{0}, {0}};
+            uint8_t curr_frame = 0;
+            PixelBuffer pb = pixelbuffer_init(FRAME_WIDTH, FRAME_HEIGHT, 3);
+
+            while(!glfwWindowShouldClose(window) && !c.stop) {
+                gettimeofday(&start, NULL); //Getting time at start of frame
+
+                //Clear the screen
+                glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+                glClear(GL_COLOR_BUFFER_BIT);
+
+                clay_update_dimensions(&r, &mstate, dt);
+                Clay_RenderCommandArray renderCommands = clay_set_layout(dt);
+
+                render_begin(&r);
+                    clay_render(&r, &bitmap, renderCommands,(uint8_t *)&tile_frame[curr_frame].data, &pb);
+                render_end(&r);
+
+                //Clear the backbuffer
+                curr_frame = !curr_frame;
+                memset(tile_frame[curr_frame].data, 0, FRAME_WIDTH * FRAME_HEIGHT *3);
+
+                //Run the CPU for this frame
+                //Assume ratio of 1 CPU clock to 3 PPU clocks
+                //Could add a master clock to make this more accurate
+                size_t count = 0; //Number of cycles this frame
+                while(count < CPU_CYCLES_PER_FRAME) {
+                    if(c.b->dma_stall > 0) { //If we need to stall the cpu because of a mass DMA transfer
+                        c.b->dma_stall--;
+                        ppu_tick(c.b->p, &tile_frame[curr_frame]);
+                        ppu_tick(c.b->p, &tile_frame[curr_frame]);
+                        ppu_tick(c.b->p, &tile_frame[curr_frame]);
+                        c.b->total_cycles++;
+                        count++;
+                        continue;
+                    }
+
+                    size_t cycles; //Number of cycles for this cpu instruction
+                    //If an IRQ occurs
+                    if(c.b->p->rom->irq_pending && !get_cpu_flag(&c, CPU_INTERRUPT_DISABLE)) {
+                        cycles = 7;
+                        interrupt_irq(&c);
+                    }
+                    //If an NMI occurs
+                    else if(c.b->p->nmi_triggered) {
+                        cycles = 7;
+                        interrupt_nmi(&c);
+                    }
+                    //Run as normal
+                    else {
+                        cycles = execute_instr(&c);
+                        // printf("0x02: %02X, 0x03: %02X\n", mem_read(c.b, (0x02)), mem_read(c.b, (0x03)));
+                    }
+                    //Tick up the ppu so they are synchronised
+                    for(int i = 0; i < cycles; i++) {
+                        ppu_tick(c.b->p, &tile_frame[curr_frame]);
+                        ppu_tick(c.b->p, &tile_frame[curr_frame]);
+                        ppu_tick(c.b->p, &tile_frame[curr_frame]);
+                        count++;
+                        c.b->total_cycles++;
+                    }
+                }
+
+                glfwSwapBuffers(window);
+                glfwPollEvents();
+                gettimeofday(&stop, NULL); //Get the time at the end of the frame
+                dt = (stop.tv_sec - start.tv_sec) * 1000 + (stop.tv_usec - start.tv_usec) / 1000.0f; //Get the frame length
+                // If the frame took less time than the set frame rate, wait until the time is the frame rate
+                if(dt < FRAME_RATE) {
+                    sleep_ms((int)FRAME_RATE - dt);
+                    dt = FRAME_RATE;
+                }
+            }
+            glfwTerminate();
+        }
+        //Freeing memory
+        if(buf) free(buf);
+        if(c.b->rom->chr_rom) free(c.b->rom->chr_rom);
+        if(c.b->rom->prg_rom) free(c.b->rom->prg_rom);
+        if(c.b->rom->chr_ram) free(c.b->rom->chr_ram);
+        if(c.b->rom->prg_ram) free(c.b->rom->prg_ram);
+        if(c.b->rom->prg_eeprom) free(c.b->rom->prg_eeprom);
+        free(c.b->rom);
+        free(c.b->p->addr_reg);
+        free(c.b->p->scroll_reg);
+        free(c.b->p);
+        free(c.b->player_1);
+        free(c.b->player_2);
+        free(c.b);
+
+        bitmap_font_free(&bitmap);
+        atlas_free(&ta);
+        render_free(&r);
+    }
+
+    // while(!glfwWindowShouldClose(window)) {
+    //     gettimeofday(&start, NULL); //Getting time at start of frame
+    //
+    //     //Clear the screen
+    //     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    //     glClear(GL_COLOR_BUFFER_BIT);
+    //
+    //     clay_update_dimensions(&r, &mstate, dt);
+    //     Clay_RenderCommandArray renderCommands = clay_set_layout(dt);
+    //
+    //     render_begin(&r);
+    //         clay_render(&r, &bitmap, renderCommands, NULL, NULL);
+    //     render_end(&r);
+    //
+    //     glfwSwapBuffers(window);
+    //     glfwPollEvents();
+    //     gettimeofday(&stop, NULL); //Get the time at the end of the frame
+    //     dt = (stop.tv_sec - start.tv_sec) * 1000 + (stop.tv_usec - start.tv_usec) / 1000.0f; //Get the frame length
+    //     // If the frame took less time than the set frame rate, wait until the time is the frame rate
+    //     if(dt < FRAME_RATE) {
+    //         sleep_ms((int)FRAME_RATE - dt);
+    //         dt = FRAME_RATE;
+    //     }
+    // }
+    // glfwTerminate();
+    // bitmap_font_free(&bitmap);
+    // atlas_free(&ta);
+    // render_free(&r);
 
     return 0;
 }
@@ -434,7 +579,7 @@ int main_old(void) {
                 // render_begin(&r, &rb);
                     // draw_frame(&r, &tile_frame[curr_frame]);
                     pixelbuffer_updload_data(&pb, (uint8_t *)&tile_frame[curr_frame].data);
-                    render_draw_pixel_buffer(&r, &pb);
+                    render_draw_pixel_buffer(&r, &pb, (NES_Quad){0,0,r.screen_width, r.screen_height}, (NES_Quad){0,0,1,1}, (NES_Vector4){1,1,1,1}, 60);
                 // render_end(&r, &rb);
 
                 //Clear the backbuffer
