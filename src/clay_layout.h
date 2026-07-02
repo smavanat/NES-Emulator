@@ -1,5 +1,6 @@
 #ifndef __CLAY_LAYOUT_H__
 #define __CLAY_LAYOUT_H__
+#include "cpu.h"
 #include "renderer.h"
 #include "bitmap_font.h"
 #include "../externals/clay.h"
@@ -12,8 +13,9 @@ typedef struct {
 
 void clay_init(Renderer *r);
 void clay_update_dimensions(Renderer *r, mouse_state *mstate, float dt);
-Clay_RenderCommandArray clay_set_layout(float dt);
+Clay_RenderCommandArray clay_set_layout(cpu *c, uint8_t *data, float dt);
 // void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray renderCommands);
-void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray renderCommands, uint8_t *data, PixelBuffer *pb);
+void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray renderCommands, PixelBuffer *pb);
+void clay_free();
 
 #endif //__CLAY_LAYOUT_H__

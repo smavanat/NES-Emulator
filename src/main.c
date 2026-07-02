@@ -394,10 +394,10 @@ int main(void) {
                 glClear(GL_COLOR_BUFFER_BIT);
 
                 clay_update_dimensions(&r, &mstate, dt);
-                Clay_RenderCommandArray renderCommands = clay_set_layout(dt);
+                Clay_RenderCommandArray renderCommands = clay_set_layout(&c, (uint8_t *)&tile_frame[curr_frame].data, dt);
 
                 render_begin(&r);
-                    clay_render(&r, &bitmap, renderCommands,(uint8_t *)&tile_frame[curr_frame].data, &pb);
+                    clay_render(&r, &bitmap, renderCommands, &pb);
                 render_end(&r);
 
                 //Clear the backbuffer
@@ -455,6 +455,7 @@ int main(void) {
                     dt = FRAME_RATE;
                 }
             }
+            clay_free();
             glfwTerminate();
         }
         //Freeing memory

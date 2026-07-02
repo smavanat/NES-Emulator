@@ -26,7 +26,7 @@ uint8_t bitmap_font_init(Bitmap_Font_Desc *opts, uint32_t atls, uint32_t tpw, ui
     return 1;
 }
 void bitmap_font_free(Bitmap_Font_Desc *bf) {
-    // glDeleteTextures(1, &bf->tex); //Replace with some render function to remove an atlas
+    // glDeleteTextures(1, &bf->tex); //TODO: Replace with some render function to remove an atlas
     // if(bf->layout == BITMAP_CUSTOM) {
     //     free(bf->desc.custom_desc.data);
     //     bf->desc.custom_desc.data = NULL;
@@ -40,7 +40,7 @@ uint8_t bitmap_draw_char(Renderer *r, Bitmap_Font_Desc *bf, char c, NES_Quad dim
     }
 
     if(c < 32 || c > 126) {
-        fprintf(stderr, "Trying to draw a non-ASCII character\n");
+        fprintf(stderr, "Trying to draw a non-ASCII character number: %hhu: %c\n", (uint8_t)c, c);
         return 0;
     }
     int index = -1;

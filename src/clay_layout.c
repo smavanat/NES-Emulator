@@ -2,17 +2,27 @@
 #include "clay_layout.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include "ppu.h"
 #include "renderer.h"
 #include "bitmap_font.h"
+#include "cpu.h"
 
 #define CLAY_IMPLEMENTATION
 #include "../externals/clay.h"
 
 //Clay Colours to be reused
 const Clay_Color COLOUR_WHITE = (Clay_Color){255, 255, 255, 255};
+const Clay_Color COLOUR_BLACK = (Clay_Color){0, 0, 0, 255};
 const Clay_Color COLOUR_LIGHT = (Clay_Color){224, 215, 210, 255};
 const Clay_Color COLOUR_RED = (Clay_Color){168, 66, 28, 255};
 const Clay_Color COLOUR_ORANGE = (Clay_Color){255, 138, 50, 255};
+
+//TODO: unify all of the malloc calls in here into a global arena so that we don't keep allocating/freeing memory
+char *cpu_state_buf;
+char *ppu_state_buf;
+char *cpu_page_buf;
+PixelBuffer *nametable_buffer;
 
 void HandleClayErrors(Clay_ErrorData errorData) {
     //NOTE: See Clay_ErrorData struct for more info
@@ -60,8 +70,73 @@ void ButtonComponent(int id, Clay_Color basic_color, Clay_Color hover_color, uin
     }
 }
 
-typedef void (*render_func)(Clay_String str, Renderer *r, PixelBuffer *pb, uint8_t *data);
-void render_game(Clay_String str, Renderer *r, PixelBuffer *pb, uint8_t *data) {
+//Generates a component that holds a text printout of the CPU state:
+void cpu_state_component(cpu *c) {
+    int len = sprintf(cpu_state_buf, "Accumulator: %hhu \nX Register: %hhu \nY Register: %hhu \nStack Pointer: %02X \nPC: %04X\n"
+                 "Status Register:\n Carry: %hhu\n Zero: %hhu\n Interrupt Disable: %hhu\n Decimal: %hhu\n Break: %hhu\n Overflow: %hhu\n Negative: %hhu",
+             c->acc, c->x, c->y, c->sp, c->pc, get_cpu_flag(c, CPU_CARRY), get_cpu_flag(c, CPU_ZERO), get_cpu_flag(c, CPU_INTERRUPT_DISABLE), get_cpu_flag(c, CPU_DECIMAL),
+           get_cpu_flag(c, CPU_BREAK), get_cpu_flag(c, CPU_OVERFLOW), get_cpu_flag(c, CPU_NEGATIVE));
+
+    Clay_String str = (Clay_String){true, len, cpu_state_buf};
+    CLAY(CLAY_ID("CPUSTATE"), {.layout = {.sizing = {CLAY_SIZING_GROW(0)}}}) {
+        CLAY_TEXT(str, {.textColor = COLOUR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_LEFT});
+    }
+}
+
+//Generates a component that holds a text printout of a given CPU page
+void cpu_page_component(cpu *c, uint8_t page_num) {
+    uint16_t start_addr = page_num * 256;
+    int len = 0;
+
+    for(int i = 0; i < 256; i++) {
+        if(i > 0 && i % 8 == 0) {
+            cpu_page_buf[len] = '\n';
+            len++;
+        }
+        len += sprintf(cpu_page_buf + len, "%02X ", mem_read(c->b, start_addr+i));
+    }
+    // printf("%s\n", cpu_page_buf);
+    Clay_String str = (Clay_String){true, len, cpu_page_buf};
+    CLAY(CLAY_ID("CPUPAGE"), {.layout = {.sizing = {CLAY_SIZING_GROW(0)}}}) {
+        CLAY_TEXT(str, {.textColor = COLOUR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_LEFT, .fontSize = 17});
+    }
+}
+
+
+// Source - https://stackoverflow.com/a/3208376
+// Posted by William Whyte, modified by community. See post 'Timeline' for change history
+// Retrieved 2026-07-02, License - CC BY-SA 4.0
+#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
+#define BYTE_TO_BINARY(byte)  \
+  ((byte) & 0x80 ? '1' : '0'), \
+  ((byte) & 0x40 ? '1' : '0'), \
+  ((byte) & 0x20 ? '1' : '0'), \
+  ((byte) & 0x10 ? '1' : '0'), \
+  ((byte) & 0x08 ? '1' : '0'), \
+  ((byte) & 0x04 ? '1' : '0'), \
+  ((byte) & 0x02 ? '1' : '0'), \
+  ((byte) & 0x01 ? '1' : '0')
+
+void ppu_state_component(ppu *p) {
+    int len = sprintf(ppu_state_buf, "PPUCTRL:"BYTE_TO_BINARY_PATTERN"\nPPUMASK:"BYTE_TO_BINARY_PATTERN"\nPPUSTATUS:"BYTE_TO_BINARY_PATTERN
+                 "\nOAMADDR: %02X\nOAMDATA: %02X\nPPUSCROLL: %04X\nPPUADDR: %04X\nPPUDATA: %02X\nOAMDMA: %02X\nNMI Triggered: %hhu\n",
+                  BYTE_TO_BINARY(p->ctrl_reg), BYTE_TO_BINARY(p->mask_reg), BYTE_TO_BINARY(p->status_reg), p->oamaddr_reg, p->oamdma_reg,
+                  get_scroll_register(p->scroll_reg), get_addr_register(p->addr_reg), p->data_reg, p->oamdma_reg, p->nmi_triggered);
+
+    Clay_String str = (Clay_String){true, len, ppu_state_buf};
+    CLAY(CLAY_ID("PPUSTATE"), {.layout = {.sizing = {CLAY_SIZING_GROW(0)}}}) {
+        CLAY_TEXT(str, {.textColor = COLOUR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_LEFT});
+    }
+}
+
+typedef struct {
+    void (*render_func)(Clay_String str, Renderer *r, PixelBuffer *pb, void *data);
+    void *data;
+    Clay_String parent_name;
+} Custom_Tex_Data;
+
+void render_game(Clay_String str, Renderer *r, PixelBuffer *pb, void *data) {
+    uint8_t * pixels = (uint8_t *)data;
     Clay_ElementId gId = Clay_GetElementId(str);
     Clay_ElementData gData = Clay_GetElementData(gId);
 
@@ -69,6 +144,16 @@ void render_game(Clay_String str, Renderer *r, PixelBuffer *pb, uint8_t *data) {
 
     pixelbuffer_updload_data(pb, data);
     render_draw_pixel_buffer(r, pb, dimensions, (NES_Quad){0,0,1,1}, (NES_Vector4){1,1,1,1}, 10);
+}
+
+void render_pattern_table(Clay_String str, Renderer *r, PixelBuffer *pb, void *data) {
+    cpu *c = (cpu *)data;
+    Clay_ElementId gId = Clay_GetElementId(str);
+    Clay_ElementData gData = Clay_GetElementData(gId);
+
+    NES_Quad dimensions = {gData.boundingBox.x, gData.boundingBox.y, gData.boundingBox.width, gData.boundingBox.height};
+    debug_draw_pattern_table(c->b->p, nametable_buffer->pixel_buf, 0);
+    render_draw_pixel_buffer(r, nametable_buffer, dimensions, (NES_Quad){0,0,1,1}, (NES_Vector4){1,1,1,1}, 10);
 }
 
 void HandleButtonInteraction(Clay_ElementId elementId, Clay_PointerData pointerInfo, void *userData) {
@@ -89,6 +174,12 @@ void clay_init(Renderer *r) {
 
     Clay_Initialize(arena, (Clay_Dimensions){r->screen_width, r->screen_height}, (Clay_ErrorHandler){HandleClayErrors});
     Clay_SetMeasureTextFunction(clay_measure_text_cb, NULL);
+
+    cpu_state_buf = malloc(256);
+    ppu_state_buf = malloc(256);
+    cpu_page_buf = malloc(1024);
+    nametable_buffer = malloc(sizeof(PixelBuffer));
+    *nametable_buffer = pixelbuffer_init(16 * 8, 16 * 8, 3);
 }
 
 void clay_update_dimensions(Renderer *r, mouse_state *mstate, float dt) {
@@ -98,7 +189,7 @@ void clay_update_dimensions(Renderer *r, mouse_state *mstate, float dt) {
     Clay_UpdateScrollContainers(true, (Clay_Vector2){mstate->scroll_pos.x, mstate->scroll_pos.y}, dt);
 }
 
-Clay_RenderCommandArray clay_set_layout(float dt) {
+Clay_RenderCommandArray clay_set_layout(cpu *c, uint8_t *frame_data, float dt) {
     // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
     Clay_BeginLayout();
 
@@ -111,27 +202,22 @@ Clay_RenderCommandArray clay_set_layout(float dt) {
             }
         }
         CLAY(CLAY_ID("Main_Content"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 8}}) {
+            //TODO: Make this scrollable
             CLAY(CLAY_ID("CPU_Sidebar"), {
                 .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {.width = CLAY_SIZING_GROW(200, 400), .height = CLAY_SIZING_GROW(0)},
-                .padding = CLAY_PADDING_ALL(16), .childGap = 16}, .backgroundColor = COLOUR_LIGHT
+                .padding = CLAY_PADDING_ALL(16), .childGap = 16}, .backgroundColor = COLOUR_RED
             }) {
-                CLAY(CLAY_ID("ProfilePictureOuter"), {.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 16,
-                .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}}, .backgroundColor = COLOUR_RED}) {
-                    CLAY_TEXT(CLAY_STRING("Clay - UI Library"), {.fontSize = 24, .textColor = COLOUR_WHITE});
-                }
-
-                // Standard C code like loops etc work inside components
-                for (int i = 0; i < 5; i++) {
-                    SidebarItemComponent(i);
-                }
-                ButtonComponent(1, COLOUR_RED, COLOUR_ORANGE, 100, 50, 400, 50, CLAY_STRING("Hovered!"), CLAY_STRING("Hover me"), HandleButtonInteraction, NULL, 16, CLAY_TEXT_ALIGN_LEFT);
+                cpu_state_component(c);
+                cpu_page_component(c, 0);
              }
             CLAY(CLAY_ID("MainContent"), { .layout = { .layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = { .width = CLAY_SIZING_GROW(300), .height = CLAY_SIZING_GROW(0) },
                 .childGap = 8}}) {
                 CLAY(CLAY_ID("Top"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 8, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
                     CLAY(CLAY_ID("Disassembly"), {.layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_GROW(0)}}, .backgroundColor = COLOUR_LIGHT}) {}
                     CLAY(CLAY_ID("Game"), {.layout = {.sizing = {CLAY_SIZING_GROW(256, 512), CLAY_SIZING_GROW(240, 480)}}, .backgroundColor = COLOUR_LIGHT}) {
-                            CLAY(CLAY_ID("Frame"), {.custom = {.customData = render_game}}) {}
+                            Custom_Tex_Data *data = malloc(sizeof(Custom_Tex_Data));
+                            *data = (Custom_Tex_Data){.parent_name = CLAY_STRING("Game"), .render_func = render_game, .data = (void *)frame_data};
+                            CLAY(CLAY_ID("Frame"), {.custom = {.customData = data}}) {}
                         }
                     CLAY(CLAY_ID("Undefined"), {.layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_GROW(0)}}, .backgroundColor = COLOUR_LIGHT}) {}
                 }
@@ -139,15 +225,24 @@ Clay_RenderCommandArray clay_set_layout(float dt) {
             }
             CLAY(CLAY_ID("PPU_Sidebar"), {
                 .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {.width = CLAY_SIZING_GROW(200, 400), .height = CLAY_SIZING_GROW(0)},
-                .padding = CLAY_PADDING_ALL(16), .childGap = 16}, .backgroundColor = COLOUR_LIGHT
-            }) {}
+                .padding = CLAY_PADDING_ALL(16), .childGap = 16}, .backgroundColor = COLOUR_RED
+            }) {
+                CLAY(CLAY_ID("PPUINTERN"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
+                    ppu_state_component(c->b->p);
+                }
+                CLAY(CLAY_ID("PPUDATA"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}}}) {
+                    Custom_Tex_Data *data = malloc(sizeof(Custom_Tex_Data));
+                    *data = (Custom_Tex_Data){.parent_name = CLAY_STRING("PPUDATA"), .render_func = render_pattern_table, .data = (void *)c};
+                    CLAY(CLAY_ID("Nametable"), {.custom = {.customData = data}}) {}
+                }
+            }
         }
     }
     // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
     return Clay_EndLayout(dt); // deltaTime is the time since the last frame, and is used for transitions
 }
 
-void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray renderCommands, uint8_t *data, PixelBuffer *pb) {
+void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray renderCommands, PixelBuffer *pb) {
     //TODO: Implement renderer that handles all of these rendering commands.
     for(int i = 0; i < renderCommands.length; i++) {
         Clay_RenderCommand *renderCommand = &renderCommands.internalArray[i];
@@ -211,11 +306,18 @@ void clay_render(Renderer *r, Bitmap_Font_Desc *bitmap, Clay_RenderCommandArray 
             break;
             // The renderer should provide a custom implementation for handling this render command based on its .customData
             case CLAY_RENDER_COMMAND_TYPE_CUSTOM: {
-                render_func rf = (render_func)renderCommand->renderData.custom.customData;
-                rf(CLAY_STRING("Game"), r, pb, data);
+                Custom_Tex_Data *ctd = (Custom_Tex_Data *)renderCommand->renderData.custom.customData;
+                ctd->render_func(ctd->parent_name, r, pb, ctd->data);
+                free(ctd);
             }
                 // printf("Custom Rendering not currently implemented\n");
             break;
         }
     }
+}
+
+void clay_free() {
+    free(cpu_state_buf);
+    free(ppu_state_buf);
+    free(cpu_page_buf);
 }

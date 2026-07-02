@@ -479,3 +479,30 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
     return 0;
 }
 
+void debug_draw_pattern_table(ppu *p, uint8_t *data, size_t bank) {
+    for(int tile_y = 0; tile_y < 16; tile_y++) {
+        for(int tile_x = 0; tile_x < 16; tile_x++) {
+            int tile_idx = tile_y * 16 + tile_x;
+            for(int py = 0; py < 8; py++) {
+                for(int px = 0; px < 8; px++) {
+                    uint8_t colour = get_tile_pixel(p, bank, tile_idx, px, py);
+                    int screen_x = tile_x * 8 + px;
+                    int screen_y = tile_y * 8 + py;
+
+                    uint8_t rgb[3];
+                    switch(colour) {
+                        case 0: rgb[0] = 0;   rgb[1] = 0;   rgb[2] = 0;   break; // black
+                        case 1: rgb[0] = 85;  rgb[1] = 85;  rgb[2] = 85;  break; // dark grey
+                        case 2: rgb[0] = 170; rgb[1] = 170; rgb[2] = 170; break; // light grey
+                        case 3: rgb[0] = 255; rgb[1] = 255; rgb[2] = 255; break; // white
+                    }
+
+                    int base = (screen_y * 3 * 16 * 8) + (screen_x *3);
+                    data[base] = rgb[0];
+                    data[base+1] = rgb[1];
+                    data[base+2] = rgb[2];
+                }
+            }
+        }
+    }
+}

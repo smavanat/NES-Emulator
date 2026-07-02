@@ -188,6 +188,8 @@ void ppu_write_data(ppu *p, uint8_t val);
 //Represents the ppu operations every clock cycle
 uint8_t ppu_tick(ppu *p, frame *fr);
 
+void debug_draw_pattern_table(ppu *p, uint8_t *data, size_t bank);
+
 //Array to store the colours used by the NES palette
 //Represents the ppu operations every clock cycle
 extern uint8_t system_palette[64][3];

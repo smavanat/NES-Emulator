@@ -350,6 +350,12 @@ void render_draw_texture(Renderer *r, uint32_t texture, NES_Quad dimensions, NES
 }
 
 void render_draw_pixel_buffer(Renderer *r, PixelBuffer *pb, NES_Quad dimensions, NES_Quad uv_dimensions, NES_Vector4 colour, uint8_t layer) {
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pb->pbo);
+    glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+    glBindTexture(GL_TEXTURE_2D, pb->pixel_tex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, pb->width, pb->height, GL_RGB, GL_UNSIGNED_BYTE, 0);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+
     render_draw_texture(r, pb->pixel_tex, dimensions, uv_dimensions, colour, layer);
 }
 

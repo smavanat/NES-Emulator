@@ -1105,7 +1105,6 @@ void print_cpu_state(cpu *c) {
 void print_stack(cpu *c) {
     printf("Addr    Val\n");
     for(int i = c->sp+1; i < 256; i++) {
-        // printf(" %03X     %02X\n", 0x100 + i, c->memory[0x100 + i]);
         printf(" %03X     %02X\n", 0x100 + i, mem_read(c->b, 0x100 + i));
     }
 }
@@ -1116,7 +1115,6 @@ void print_page(cpu *c, uint8_t page_num) {
 
     for(int i = 0; i < 256; i++) {
         if(i > 0 && i % 16 == 0) printf("\n");
-        // printf("%02x ", c->memory[start_addr+i]);
         printf("%02x ", mem_read(c->b, start_addr+i));
     }
     printf("\n");
