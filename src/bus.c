@@ -580,20 +580,15 @@ int assign_rom_functions(rom *r, uint8_t *buf, size_t prg_rom_start, size_t chr_
 //      Mapper 4 (MMC3) -> DONE
 //      Mapper 5 (MMC5) -> TODO
 //      Mapper 7 (AxROM) -> DONE
-//      Mapper 9 (MMC2) -> TODO
-//      Mapper 11 (Color Dreams) -> TODO
-//      Mapper 19 (Namco 163) -> TODO
-//      Mapper 69 (Sunsoft FME-7) -> TODO
-//      Mapper 66 (GxROM) -> TODO
-int rom_load(rom *r, uint8_t *buf, int buf_len) {
+uint8_t rom_load(rom *r, uint8_t *buf, int buf_len) {
     if(buf_len < 16) {
         fprintf(stderr, "ROM is too small to contain an iNES header\n");
-        return 1;
+        return 0;
     }
 
     if(buf[0] != 'N' || buf[1] != 'E' || buf[2] != 'S' || buf[3] != 0x1A) {
         fprintf(stderr, "ROM is not in the iNES format\n");
-        return 1;
+        return 0;
     }
 
     if(buf[6] & 0b1000) r->mirroring = MIR_FOURSCREEN;
@@ -609,7 +604,7 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
                 case 2: fprintf(stderr, "This emulator does not support the Nintendo Playchoice 10\n"); break;
                 case 3: fprintf(stderr, "This emulator does not support the Extended Console Type\n"); break;
             }
-            return 1;
+            return 0;
         }
 
         //PRG ROM size LSB is in register 4;
@@ -668,7 +663,7 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
 
         if ((size_t)buf_len < required) {
             fprintf(stderr, "ROM file truncated\n");
-            return 1;
+            return 0;
         }
 
         size_t prg_rom_start = 16 + trainer_size;
@@ -680,7 +675,7 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
         r->submapper = (buf[8] & 0xF0) >> 4;
         if(!assign_rom_functions(r, buf, prg_rom_start, chr_rom_start)) {
             fprintf(stderr, "Mapper %hu not supported\n", r->mapper);
-            return 1;
+            return 0;
         }
     }
     //iNES
@@ -688,7 +683,7 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
         //Check for malicious input
         if(buf[12] || buf[13] || buf[14] || buf[15]) {
             fprintf(stderr, "Last four bytes of ROM header not zero\n");
-            return 1;
+            return 0;
         }
 
         //Check that the console type is the NES
@@ -697,7 +692,7 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
                 case 1: fprintf(stderr, "This emulator does not support the Nintendo Vs System\n"); break;
                 case 2: fprintf(stderr, "This emulator does not support the Nintendo Playchoice 10\n"); break;
             }
-            return 1;
+            return 0;
         }
 
         r->prg_rom_sz = buf[4] * PRG_PAGE_SIZE;
@@ -715,7 +710,7 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
 
         if ((size_t)buf_len < required) {
             fprintf(stderr, "ROM file truncated\n");
-            return 1;
+            return 0;
         }
 
         size_t prg_rom_start = 16 + trainer_size;
@@ -728,11 +723,11 @@ int rom_load(rom *r, uint8_t *buf, int buf_len) {
         r->mapper = (buf[7] & 0xF0) | (buf[6] >> 4);
         if(!assign_rom_functions(r, buf, prg_rom_start, chr_rom_start)) {
             fprintf(stderr, "Mapper %hu not supported\n", r->mapper);
-            return 1;
+            return 0;
         }
 
         //TODO: Check byte 10 for TV system type (PAL/NSTC) and whether there are bus conflicts
     }
 
-    return 0;
+    return 1;
 }

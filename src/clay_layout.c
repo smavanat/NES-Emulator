@@ -17,6 +17,7 @@
 //      Add ability to switch between different regions of memory for CPU/ROM/PPU(switch between 1st and second nametable)
 //      Add scrolling so things do not squish together when the screen is too small
 //      Make it look nice - Add labels to everything so its clear what different parts represent
+//      Make it so that you can switch between stepping between frames and instructions
 //      Once APU done, add Debug for it on the other side of the Game (opposite to Disassembly)
 
 //Clay Colours to be reused
@@ -35,6 +36,12 @@ char *rom_state_buf;
 char *rom_page_buf;
 uint8_t *pixelbuf_data;
 
+typedef enum {
+    JES_BUTTON_SWITCH_TO_GAME,
+    JES_BUTTON_SWITCH_TO_DEBUGGER,
+    JES_BUTTON_OTHER,
+} Button_Type;
+
 void HandleClayErrors(Clay_ErrorData errorData) {
     //NOTE: See Clay_ErrorData struct for more info
     printf("%s\n", errorData.errorText.chars);
@@ -43,41 +50,25 @@ void HandleClayErrors(Clay_ErrorData errorData) {
     }
 }
 
-//Example measure text function
-static inline Clay_Dimensions MeasureText(Clay_StringSlice text, Clay_TextElementConfig *config, uintptr_t userData) {
-    //Clay_TextElementConfig contains members such as fontId, fontSize, letterSpacing
-    //Note: Clay_String->chars is not guaranteed to be null terminated
-    return (Clay_Dimensions){
-        .width = text.length * config->fontSize, //Only works for monospace fonts
-        .height = config->fontSize
-    };
-}
+//Generates a reusable button component
+void ButtonComponent(int id, Clay_Color basic_color, Clay_Color hover_color, uint16_t minX, uint16_t minY, uint16_t maxX, uint16_t maxY,
+                     Clay_String text, void (*button_hander)(Clay_ElementId id, Clay_PointerData info, void *userData),
+                     void *userData, uint8_t padding, Clay_TextAlignment text_align, Clay_ChildAlignment alignment) {
+    CLAY(CLAY_IDI("Button", id), {.layout = {.sizing = {CLAY_SIZING_GROW(minX, maxX), CLAY_SIZING_GROW(minY, maxY)},
+        .padding = CLAY_PADDING_ALL(padding), .childAlignment = alignment}, .backgroundColor = Clay_Hovered() ? hover_color : basic_color}) {
+        Clay_OnHover(button_hander, userData);
 
-//Layout config is just a struct that can be declared statically or inline
-Clay_ElementDeclaration sidebarItemConfig = (Clay_ElementDeclaration){
-    .layout = {
-        .sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_FIXED(50)}
-    },
-    .backgroundColor = COLOUR_ORANGE
-};
-
-//Reusable components are just normal functions
-void SidebarItemComponent(int index) {
-    CLAY(CLAY_IDI("Sidebar", index), sidebarItemConfig) {
-        //Children go here
+        CLAY_TEXT(text, {.textColor = COLOUR_WHITE, .textAlignment = text_align});
     }
 }
 
-//Generates a reusable button component
-void ButtonComponent(int id, Clay_Color basic_color, Clay_Color hover_color, uint16_t minX, uint16_t minY, uint16_t maxX, uint16_t maxY,
-                     Clay_String hover_string, Clay_String regular_string, void (*button_hander)(Clay_ElementId id, Clay_PointerData info, void *userData),
-                     void *userData, uint8_t padding, Clay_TextAlignment align) {
-    CLAY(CLAY_IDI("Button", id), {.layout = {.sizing = {CLAY_SIZING_GROW(minX, maxX), CLAY_SIZING_GROW(minY, maxY)},
-        .padding = CLAY_PADDING_ALL(padding)}, .backgroundColor = Clay_Hovered() ? hover_color : basic_color}) {
-        Clay_OnHover(button_hander, userData);
-        bool buttonHovered = Clay_Hovered();
-
-        CLAY_TEXT(buttonHovered ? hover_string : regular_string, {.textColor = COLOUR_WHITE, .textAlignment = align});
+void HandleButtonInteraction(Clay_ElementId elementId, Clay_PointerData pointerInfo, void *userData) {
+    if(pointerInfo.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+        switch ((Button_Type)((intptr_t)userData)) {
+            case JES_BUTTON_SWITCH_TO_GAME: curr_screen = JES_GAME; break;
+            case JES_BUTTON_SWITCH_TO_DEBUGGER: curr_screen = JES_DEBUGGER; break;
+            default: break;
+        }
     }
 }
 
@@ -271,11 +262,6 @@ void disassembly_component(char *buf, size_t buf_sz) {
     }
 }
 
-void HandleButtonInteraction(Clay_ElementId elementId, Clay_PointerData pointerInfo, void *userData) {
-    if(pointerInfo.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME)
-        printf("Button Clicked\n");
-}
-
 Clay_Dimensions clay_measure_text_cb(Clay_StringSlice text, Clay_TextElementConfig *config, void *userData) {
     uint16_t fontSize = (config->fontSize > 0) ? config->fontSize : 20;
     BOB_Vector2 res;
@@ -307,16 +293,30 @@ void clay_update_dimensions(BOB_Renderer_Handle r, mouse_state *mstate, float dt
     Clay_UpdateScrollContainers(true, (Clay_Vector2){mstate->scroll_pos.x, mstate->scroll_pos.y}, dt);
 }
 
-Clay_RenderCommandArray clay_set_layout(cpu *c, uint8_t *frame_data, float dt, char *disassembly_buf, size_t disassembly_buf_sz) {
+Clay_RenderCommandArray clay_set_start_layout(float dt) {
+    // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
+    Clay_BeginLayout();
+
+    CLAY(CLAY_ID("OuterContainer"), {.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 8, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}, .backgroundColor = {250, 250, 255, 255}}) {
+        CLAY(CLAY_ID("Buttons"), {.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 16, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
+            ButtonComponent(1, COLOUR_RED, COLOUR_ORANGE, 32, 40, 180, 40, CLAY_STRING("Play Game"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_GAME, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+            ButtonComponent(2, COLOUR_RED, COLOUR_ORANGE, 32, 40, 180, 40, CLAY_STRING("Open Debugger"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_DEBUGGER, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+         }
+    }
+    // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
+    return Clay_EndLayout(dt); // deltaTime is the time since the last frame, and is used for transitions
+}
+
+Clay_RenderCommandArray clay_set_debugger_layout(cpu *c, uint8_t *frame_data, float dt, char *disassembly_buf, size_t disassembly_buf_sz) {
     // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
     Clay_BeginLayout();
 
     CLAY(CLAY_ID("OuterContainer"), { .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 8}, .backgroundColor = {250, 250, 255, 255}}) {
         CLAY(CLAY_ID("Buttons"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(32)}, .childGap = 16, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
             CLAY(CLAY_ID("ButtonContainer"), { .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 4, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
-                ButtonComponent(2, COLOUR_RED, COLOUR_ORANGE, 32, 40, 100, 40, CLAY_STRING("Pause"), CLAY_STRING("Pause"), HandleButtonInteraction, NULL, 10, CLAY_TEXT_ALIGN_CENTER);
-                ButtonComponent(3, COLOUR_RED, COLOUR_ORANGE, 32, 40, 100, 40, CLAY_STRING("Play"), CLAY_STRING("Play"), HandleButtonInteraction, NULL, 10, CLAY_TEXT_ALIGN_CENTER);
-                ButtonComponent(4, COLOUR_RED, COLOUR_ORANGE, 32, 40, 100, 40, CLAY_STRING("Stop"), CLAY_STRING("Stop"), HandleButtonInteraction, NULL, 10, CLAY_TEXT_ALIGN_CENTER);
+                ButtonComponent(2, COLOUR_RED, COLOUR_ORANGE, 32, 40, 100, 40, CLAY_STRING("Pause"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+                ButtonComponent(3, COLOUR_RED, COLOUR_ORANGE, 32, 40, 100, 40, CLAY_STRING("Play"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+                ButtonComponent(4, COLOUR_RED, COLOUR_ORANGE, 32, 40, 100, 40, CLAY_STRING("Stop"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
             }
         }
         CLAY(CLAY_ID("Main_Content"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 8}}) {
@@ -327,7 +327,7 @@ Clay_RenderCommandArray clay_set_layout(cpu *c, uint8_t *frame_data, float dt, c
             }) {
                 cpu_state_component(c);
                 CLAY(CLAY_ID("CPU_PAGE_OUTER"), {.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8), .childGap = 8}, .backgroundColor = COLOUR_BLACK}) {
-                    ButtonComponent(5, COLOUR_RED, COLOUR_ORANGE, 32, 30, 145, 30, CLAY_STRING("Change Page"), CLAY_STRING("Change Page"), HandleButtonInteraction, NULL, 6, CLAY_TEXT_ALIGN_CENTER);
+                    ButtonComponent(5, COLOUR_RED, COLOUR_ORANGE, 32, 30, 145, 30, CLAY_STRING("Change Page"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 6, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
                     cpu_page_component(c, 0);
                 }
              }
@@ -348,8 +348,8 @@ Clay_RenderCommandArray clay_set_layout(cpu *c, uint8_t *frame_data, float dt, c
                     rom_state_component(c->b->rom);
                     CLAY(CLAY_ID("ROM_MEMORY"), {.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 8}, .backgroundColor = COLOUR_BLACK}) {
                         CLAY(CLAY_ID("ROM_BUTTONS"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}, .padding = CLAY_PADDING_ALL(8), .childGap = 8}}) {
-                            ButtonComponent(6, COLOUR_RED, COLOUR_ORANGE, 32, 30, 170, 30, CLAY_STRING("Change Memory"), CLAY_STRING("Change Memory"), HandleButtonInteraction, NULL, 6, CLAY_TEXT_ALIGN_CENTER);
-                            ButtonComponent(7, COLOUR_RED, COLOUR_ORANGE, 32, 30, 145, 30, CLAY_STRING("Change Page"), CLAY_STRING("Change Page"), HandleButtonInteraction, NULL, 6, CLAY_TEXT_ALIGN_CENTER);
+                            ButtonComponent(6, COLOUR_RED, COLOUR_ORANGE, 32, 30, 170, 30, CLAY_STRING("Change Memory"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 6, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+                            ButtonComponent(7, COLOUR_RED, COLOUR_ORANGE, 32, 30, 145, 30, CLAY_STRING("Change Page"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 6, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
                         }
                         rom_page_component(c->b->rom, 3, 0);
                     }
@@ -368,6 +368,21 @@ Clay_RenderCommandArray clay_set_layout(cpu *c, uint8_t *frame_data, float dt, c
                     }
                 }
             }
+        }
+    }
+    // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
+    return Clay_EndLayout(dt); // deltaTime is the time since the last frame, and is used for transitions
+}
+
+Clay_RenderCommandArray clay_set_game_layout(cpu *c, uint8_t *frame_data, float dt) {
+    // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
+    Clay_BeginLayout();
+
+    CLAY(CLAY_ID("OuterContainer"), { .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}}, .backgroundColor = {0, 0, 0, 0}}) {
+        CLAY(CLAY_ID("Game"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}}, .backgroundColor = COLOUR_LIGHT}) {
+                Custom_Tex_Data *data = malloc(sizeof(Custom_Tex_Data));
+                *data = (Custom_Tex_Data){.parent_name = CLAY_STRING("Game"), .render_func = render_game, .data = (void *)frame_data};
+                CLAY(CLAY_ID("Frame"), {.custom = {.customData = data}}) {}
         }
     }
     // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout

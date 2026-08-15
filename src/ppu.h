@@ -111,7 +111,7 @@ struct rom {
 };
 
 //Loads a rom from a buffer
-int rom_load(rom *r, uint8_t *buf, int buf_len);
+uint8_t rom_load(rom *r, uint8_t *buf, int buf_len);
 
 typedef struct {
     //Memory regions
