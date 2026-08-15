@@ -107,6 +107,7 @@ struct rom {
     uint8_t irq_pending;
     uint8_t battery_memory;
     uint8_t mapper_registers[16];
+    uint8_t num_mapper_registers;
 };
 
 //Loads a rom from a buffer

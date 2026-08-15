@@ -507,6 +507,7 @@ int assign_rom_functions(rom *r, uint8_t *buf, size_t prg_rom_start, size_t chr_
             r->mapper_registers[0] = 0x0C;
             r->mapper_registers[4] = 0;
             r->mapper_registers[5] = 0;
+            r->num_mapper_registers = 6;
 
             //If not in NES 2.0 or not using iNES extensions, need to assume PRG_RAM size
             if(!r->prg_ram_sz) r->prg_ram_sz = 0x8000;
@@ -530,6 +531,7 @@ int assign_rom_functions(rom *r, uint8_t *buf, size_t prg_rom_start, size_t chr_
             r->ppu_write = mapper_3_ppu_write;
         break;
         case 4:
+            r->num_mapper_registers = 14;
             r->cpu_read = mapper_4_cpu_read;
             r->cpu_write = mapper_4_cpu_write;
             r->ppu_read = mapper_4_ppu_read;
@@ -542,6 +544,7 @@ int assign_rom_functions(rom *r, uint8_t *buf, size_t prg_rom_start, size_t chr_
             r->ppu_write = mapper_5_ppu_write;
         break;
         case 7:
+            r->num_mapper_registers = 1;
             r->cpu_read = mapper_7_cpu_read;
             r->cpu_write = mapper_7_cpu_write;
             r->ppu_read = mapper_7_ppu_read;

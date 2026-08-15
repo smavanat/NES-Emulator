@@ -1120,3 +1120,165 @@ void print_page(cpu *c, uint8_t page_num) {
     printf("\n");
 }
 
+int append_disassembly_string(cpu *c, char *buf) {
+    uint16_t disassembly_pc = c->pc;
+    uint8_t opcode = mem_read(c->b, disassembly_pc++);
+
+    instruction instr = instructions[opcode];
+
+    char *opcode_str;
+
+    switch(instr.instr) {
+        case CPU_OPCODE_LDA: opcode_str = "LDA"; break;
+        case CPU_OPCODE_LDX: opcode_str = "LDX"; break;
+        case CPU_OPCODE_LDY: opcode_str = "LDY"; break;
+        case CPU_OPCODE_STA: opcode_str = "STA"; break;
+        case CPU_OPCODE_STX: opcode_str = "STX"; break;
+        case CPU_OPCODE_STY: opcode_str = "STY"; break;
+        case CPU_OPCODE_TAX: opcode_str = "TAX"; break;
+        case CPU_OPCODE_TXA: opcode_str = "TXA"; break;
+        case CPU_OPCODE_TAY: opcode_str = "TAY"; break;
+        case CPU_OPCODE_TYA: opcode_str = "TYA"; break;
+        case CPU_OPCODE_ADC: opcode_str = "ADC"; break;
+        case CPU_OPCODE_SBC: opcode_str = "SBC"; break;
+        case CPU_OPCODE_INC: opcode_str = "INC"; break;
+        case CPU_OPCODE_DEC: opcode_str = "DEC"; break;
+        case CPU_OPCODE_INX: opcode_str = "INX"; break;
+        case CPU_OPCODE_DEX: opcode_str = "DEX"; break;
+        case CPU_OPCODE_INY: opcode_str = "INY"; break;
+        case CPU_OPCODE_DEY: opcode_str = "DEY"; break;
+        case CPU_OPCODE_ASL: opcode_str = "ASL"; break;
+        case CPU_OPCODE_LSR: opcode_str = "LSR"; break;
+        case CPU_OPCODE_ROL: opcode_str = "ROL"; break;
+        case CPU_OPCODE_ROR: opcode_str = "ROR"; break;
+        case CPU_OPCODE_AND: opcode_str = "AND"; break;
+        case CPU_OPCODE_ORA: opcode_str = "ORA"; break;
+        case CPU_OPCODE_XOR: opcode_str = "XOR"; break;
+        case CPU_OPCODE_BIT: opcode_str = "BIT"; break;
+        case CPU_OPCODE_CMP: opcode_str = "CMP"; break;
+        case CPU_OPCODE_CPX: opcode_str = "CPX"; break;
+        case CPU_OPCODE_CPY: opcode_str = "CPY"; break;
+        case CPU_OPCODE_BCC: opcode_str = "BCC"; break;
+        case CPU_OPCODE_BCS: opcode_str = "BCS"; break;
+        case CPU_OPCODE_BEQ: opcode_str = "BEQ"; break;
+        case CPU_OPCODE_BNE: opcode_str = "BNE"; break;
+        case CPU_OPCODE_BPL: opcode_str = "BPL"; break;
+        case CPU_OPCODE_BMI: opcode_str = "BMI"; break;
+        case CPU_OPCODE_BVC: opcode_str = "BVC"; break;
+        case CPU_OPCODE_BVS: opcode_str = "BVS"; break;
+        case CPU_OPCODE_JMP: opcode_str = "JMP"; break;
+        case CPU_OPCODE_JSR: opcode_str = "JSR"; break;
+        case CPU_OPCODE_RTS: opcode_str = "RTS"; break;
+        case CPU_OPCODE_BRK: opcode_str = "BRK"; break;
+        case CPU_OPCODE_RTI: opcode_str = "RTI"; break;
+        case CPU_OPCODE_PHA: opcode_str = "PHA"; break;
+        case CPU_OPCODE_PLA: opcode_str = "PLA"; break;
+        case CPU_OPCODE_PHP: opcode_str = "PHP"; break;
+        case CPU_OPCODE_PLP: opcode_str = "PLP"; break;
+        case CPU_OPCODE_TXS: opcode_str = "TXS"; break;
+        case CPU_OPCODE_TSX: opcode_str = "TSX"; break;
+        case CPU_OPCODE_CLC: opcode_str = "CLC"; break;
+        case CPU_OPCODE_SEC: opcode_str = "SEC"; break;
+        case CPU_OPCODE_CLI: opcode_str = "CLI"; break;
+        case CPU_OPCODE_SEI: opcode_str = "SEI"; break;
+        case CPU_OPCODE_CLD: opcode_str = "CLD"; break;
+        case CPU_OPCODE_SED: opcode_str = "SED"; break;
+        case CPU_OPCODE_CLV: opcode_str = "CLV"; break;
+        case CPU_OPCODE_NOP: opcode_str = "NOP"; break;
+        case CPU_OPCODE_STP: opcode_str = "STP"; break;
+        case CPU_OPCODE_SLO: opcode_str = "SLO"; break;
+        case CPU_OPCODE_ANC: opcode_str = "ANC"; break;
+        case CPU_OPCODE_RLA: opcode_str = "RLA"; break;
+        case CPU_OPCODE_SRE: opcode_str = "SRE"; break;
+        case CPU_OPCODE_ALR: opcode_str = "ALR"; break;
+        case CPU_OPCODE_ARR: opcode_str = "ARR"; break;
+        case CPU_OPCODE_RRA: opcode_str = "RRA"; break;
+        case CPU_OPCODE_SAX: opcode_str = "SAX"; break;
+        case CPU_OPCODE_XAA: opcode_str = "XAA"; break;
+        case CPU_OPCODE_AHX: opcode_str = "AHX"; break;
+        case CPU_OPCODE_TAS: opcode_str = "TAS"; break;
+        case CPU_OPCODE_LAX: opcode_str = "LAX"; break;
+        case CPU_OPCODE_LAS: opcode_str = "LAS"; break;
+        case CPU_OPCODE_DCP: opcode_str = "DCP"; break;
+        case CPU_OPCODE_AXS: opcode_str = "AXS"; break;
+        case CPU_OPCODE_ISC: opcode_str = "ISC"; break;
+        case CPU_OPCODE_SHX: opcode_str = "SHX"; break;
+        case CPU_OPCODE_SHY: opcode_str = "SHY"; break;
+    }
+
+    int len;
+    switch(instr.addr_mode) {
+        case CPU_ADDR_ABSOLUTE: {
+            uint8_t lo = mem_read(c->b, disassembly_pc++);
+            uint16_t hi = mem_read(c->b, disassembly_pc++);
+            uint16_t addr = (hi << 8) | lo;
+
+            len = sprintf(buf, "%04X : %s $%04X\n", c->pc, opcode_str, addr);
+        }
+        break;
+        case CPU_ADDR_ABSOLUTE_X: {
+            uint8_t lo = mem_read(c->b, disassembly_pc++);
+            uint16_t hi = mem_read(c->b, disassembly_pc++);
+            uint16_t addr = (hi << 8) | lo;
+
+            len = sprintf(buf, "%04X : %s $%04X, x\n", c->pc, opcode_str, addr);
+        } break;
+        case CPU_ADDR_ABSOLUTE_Y: {
+            uint8_t lo = mem_read(c->b, disassembly_pc++);
+            uint16_t hi = mem_read(c->b, disassembly_pc++);
+            uint16_t addr = (hi << 8) | lo;
+
+            len = sprintf(buf, "%04X : %s $%04X, y\n", c->pc, opcode_str, addr);
+        }break;
+        case CPU_ADDR_ACCUMULATOR: {
+            len = sprintf(buf, "%04X : %s A\n", c->pc, opcode_str);
+        } break;
+        case CPU_ADDR_IMMEDIATE: {
+            uint8_t val = mem_read(c->b, disassembly_pc++);
+
+            len = sprintf(buf, "%04X : %s #$%02X\n", c->pc, opcode_str, val);
+        } break;
+        case CPU_ADDR_IMPLICIT:
+            len = sprintf(buf, "%04X : %s\n", c->pc, opcode_str);
+            break;
+        case CPU_ADDR_INDIRECT: {
+            uint8_t lo = mem_read(c->b, disassembly_pc++);
+            uint16_t hi = mem_read(c->b, disassembly_pc++);
+            uint16_t addr = (hi << 8) | lo;
+
+            len = sprintf(buf, "%04X : %s ($%04X)\n", c->pc, opcode_str, addr);
+        } break;
+        case CPU_ADDR_INDIRECT_X: {
+            uint8_t val = mem_read(c->b, disassembly_pc++);
+
+            len = sprintf(buf, "%04X : %s ($%02X, x)\n", c->pc, opcode_str, val);
+        } break;
+        case CPU_ADDR_INDIRECT_Y: {
+            uint8_t val = mem_read(c->b, disassembly_pc++);
+
+            len = sprintf(buf, "%04X : %s ($%02X), y\n", c->pc, opcode_str, val);
+        } break;
+        case CPU_ADDR_RELATIVE: {
+            uint8_t val = mem_read(c->b, disassembly_pc++);
+
+            len = sprintf(buf, "%04X : %s $%02X\n", c->pc, opcode_str, val);
+        } break;
+        case CPU_ADDR_ZERO_PAGE: {
+            uint8_t val = mem_read(c->b, disassembly_pc++);
+
+            len = sprintf(buf, "%04X : %s $%02X\n", c->pc, opcode_str, val);
+        } break;
+        case CPU_ADDR_ZERO_PAGE_X: {
+            uint8_t val = mem_read(c->b, disassembly_pc++);
+
+            len = sprintf(buf, "%04X : %s $%02X, x\n", c->pc, opcode_str, val);
+        } break;
+        case CPU_ADDR_ZERO_PAGE_Y: {
+            uint8_t val = mem_read(c->b, disassembly_pc++);
+
+            len = sprintf(buf, "%04X : %s $%02X, y\n", c->pc, opcode_str, val);
+        } break;
+    }
+
+    return len;
+}

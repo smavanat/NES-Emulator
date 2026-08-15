@@ -41,7 +41,8 @@ target_link_options(jes PRIVATE -fsanitize=address)
 # Add include directories (external libraries)
 target_include_directories(jes
     PRIVATE
-        "${CMAKE_SOURCE_DIR}/GLFW/"
+        # "${CMAKE_SOURCE_DIR}/GLFW/"
+        "${CMAKE_SOURCE_DIR}/externals/"
 )
 
 if(APPLE)

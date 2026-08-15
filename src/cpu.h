@@ -171,6 +171,7 @@ size_t execute_instr(cpu *c);
 void interrupt_nmi(cpu *c);
 //Starts an IRQ interrupt
 void interrupt_irq(cpu *c);
+int append_disassembly_string(cpu *c, char *buf);
 
 //Array holding all of the instructions for the 6502
 extern instruction instructions[256];
