@@ -11,8 +11,8 @@
 #include "../externals/clay.h"
 
 
-//TODO: Make the pause/play/stop buttons do something
-//      Add a button to step through one CPU instruction at a time
+//TODO: Make the disassembly printout work
+//      Add ability to step multiple frames/instr at a time (use a slider between 0 and 10 ig)
 //      Add ability to switch between different regions of memory for CPU/ROM/PPU(switch between 1st and second nametable)
 //      Add scrolling so things do not squish together when the screen is too small
 //      Make it look nice - Add labels to everything so its clear what different parts represent
@@ -51,6 +51,10 @@ typedef enum {
     JES_BUTTON_SWITCH_TO_GAME,
     JES_BUTTON_SWITCH_TO_DEBUGGER,
     JES_BUTTON_SWITCH_TO_START,
+    JES_BUTTON_PAUSE,
+    JES_BUTTON_PLAY,
+    JES_BUTTON_STEP_FRAME,
+    JES_BUTTON_STEP_INSTR,
     JES_BUTTON_OTHER,
 } Button_Type;
 
@@ -80,6 +84,10 @@ void HandleButtonInteraction(Clay_ElementId elementId, Clay_PointerData pointerI
             case JES_BUTTON_SWITCH_TO_GAME: curr_screen = JES_GAME; break;
             case JES_BUTTON_SWITCH_TO_DEBUGGER: curr_screen = JES_DEBUGGER; break;
             case JES_BUTTON_SWITCH_TO_START: curr_screen = JES_START; break;
+            case JES_BUTTON_PAUSE: pause_game = 1; break;
+            case JES_BUTTON_PLAY: pause_game = 0; break;
+            case JES_BUTTON_STEP_FRAME: game_playback = JES_PLAYBACK_FRAME; break;
+            case JES_BUTTON_STEP_INSTR: game_playback = JES_PLAYBACK_INSTR; break;
             default: break;
         }
     }
@@ -312,8 +320,8 @@ Clay_RenderCommandArray clay_set_start_layout(float dt) {
 
     CLAY(CLAY_ID("OuterContainer"), {.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 8, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}, .backgroundColor = {250, 250, 255, 255}}) {
         CLAY(CLAY_ID("Buttons"), {.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 16, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
-            ButtonComponent(1, COLOUR_RED, COLOUR_GOLDEN_ORANGE, 32, 40, 180, 40, CLAY_STRING("Play Game"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_GAME, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
-            ButtonComponent(2, COLOUR_RED, COLOUR_GOLDEN_ORANGE, 32, 40, 180, 40, CLAY_STRING("Open Debugger"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_DEBUGGER, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+            ButtonComponent(1, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 32, 40, 180, 40, CLAY_STRING("Play Game"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_GAME, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+            ButtonComponent(2, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 32, 40, 180, 40, CLAY_STRING("Open Debugger"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_DEBUGGER, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
          }
     }
     // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
@@ -327,9 +335,11 @@ Clay_RenderCommandArray clay_set_debugger_layout(cpu *c, uint8_t *frame_data, fl
     CLAY(CLAY_ID("OuterContainer"), { .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 8}, .backgroundColor = {250, 250, 255, 255}}) {
         CLAY(CLAY_ID("Buttons"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(32)}, .childGap = 16, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
             CLAY(CLAY_ID("ButtonContainer"), { .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 4, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
-                ButtonComponent(2, COLOUR_RED, COLOUR_GOLDEN_ORANGE, 32, 40, 100, 40, CLAY_STRING("Pause"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
-                ButtonComponent(3, COLOUR_RED, COLOUR_GOLDEN_ORANGE, 32, 40, 100, 40, CLAY_STRING("Play"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
-                ButtonComponent(4, COLOUR_RED, COLOUR_GOLDEN_ORANGE, 32, 40, 100, 40, CLAY_STRING("Stop"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+                ButtonComponent(1, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 140, 40, 140, 40, CLAY_STRING("Main Menu"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_START, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+                ButtonComponent(2, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 100, 40, 100, 40, CLAY_STRING("Pause"), HandleButtonInteraction, (void *)JES_BUTTON_PAUSE, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+                ButtonComponent(3, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 100, 40, 100, 40, CLAY_STRING("Play"), HandleButtonInteraction, (void *)JES_BUTTON_PLAY, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+                ButtonComponent(4, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 140, 40, 140, 40, CLAY_STRING("Step Frame"), HandleButtonInteraction, (void *)JES_BUTTON_STEP_FRAME, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+                ButtonComponent(5, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 140, 40, 140, 40, CLAY_STRING("Step Instr"), HandleButtonInteraction, (void *)JES_BUTTON_STEP_INSTR, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
             }
         }
         CLAY(CLAY_ID("Main_Content"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 8}}) {
@@ -340,7 +350,7 @@ Clay_RenderCommandArray clay_set_debugger_layout(cpu *c, uint8_t *frame_data, fl
             }) {
                 cpu_state_component(c);
                 CLAY(CLAY_ID("CPU_PAGE_OUTER"), {.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8), .childGap = 8}, .backgroundColor = COLOUR_INK_BLACK}) {
-                    ButtonComponent(5, COLOUR_RED, COLOUR_GOLDEN_ORANGE, 32, 30, 145, 30, CLAY_STRING("Change Page"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 6, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+                    ButtonComponent(6, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 32, 30, 145, 30, CLAY_STRING("Change Page"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 6, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
                     cpu_page_component(c, 0);
                 }
              }
@@ -361,8 +371,8 @@ Clay_RenderCommandArray clay_set_debugger_layout(cpu *c, uint8_t *frame_data, fl
                     rom_state_component(c->b->rom);
                     CLAY(CLAY_ID("ROM_MEMORY"), {.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 8}, .backgroundColor = COLOUR_INK_BLACK}) {
                         CLAY(CLAY_ID("ROM_BUTTONS"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}, .padding = CLAY_PADDING_ALL(8), .childGap = 8}}) {
-                            ButtonComponent(6, COLOUR_RED, COLOUR_GOLDEN_ORANGE, 32, 30, 170, 30, CLAY_STRING("Change Memory"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 6, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
-                            ButtonComponent(7, COLOUR_RED, COLOUR_GOLDEN_ORANGE, 32, 30, 145, 30, CLAY_STRING("Change Page"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 6, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+                            ButtonComponent(7, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 32, 30, 170, 30, CLAY_STRING("Change Memory"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 6, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+                            ButtonComponent(8, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 32, 30, 145, 30, CLAY_STRING("Change Page"), HandleButtonInteraction, (void *)JES_BUTTON_OTHER, 6, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
                         }
                         rom_page_component(c->b->rom, 3, 0);
                     }
@@ -393,9 +403,9 @@ Clay_RenderCommandArray clay_set_game_layout(cpu *c, uint8_t *frame_data, float 
 
     CLAY(CLAY_ID("OuterContainer"), { .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(64), .childAlignment = {.x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER}}, .backgroundColor = {0, 0, 0, 0}}) {
         CLAY(CLAY_ID("Game"), {.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_FIXED(272), CLAY_SIZING_FIXED(472)}, .childGap = 16, .childAlignment = {.x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_TOP}, .padding = CLAY_PADDING_ALL(32)}, .backgroundColor = COLOUR_DARK_TEAL}) {
-            ButtonComponent(6, COLOUR_RED, COLOUR_GOLDEN_ORANGE, 32, 60, 145, 60, CLAY_STRING("Open in Debugger"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_DEBUGGER, 6, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER});
+            ButtonComponent(6, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 32, 60, 145, 60, CLAY_STRING("Open in Debugger"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_DEBUGGER, 6, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER});
             CLAY(CLAY_ID("Separator"), {.layout = {.sizing = {.height = CLAY_SIZING_GROW(0)}}}) {}
-            ButtonComponent(7, COLOUR_RED, COLOUR_GOLDEN_ORANGE, 32, 30, 145, 30, CLAY_STRING("Main Menu"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_START, 6, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+            ButtonComponent(7, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 32, 30, 145, 30, CLAY_STRING("Main Menu"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_START, 6, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
         }
     }
     // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout

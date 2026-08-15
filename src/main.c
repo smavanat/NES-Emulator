@@ -38,6 +38,8 @@ JES_Screen curr_screen = JES_START;
 
 uint8_t pause_game = 0;
 
+Game_Playback game_playback = JES_PLAYBACK_NORMAL;
+
 //Thank you Bernardo: https://stackoverflow.com/questions/1157209/is-there-an-alternative-sleep-function-in-c-to-milliseconds
 #ifdef WIN32
 #include <windows.h>
@@ -226,7 +228,7 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
                 joypad_set_button_pressed(c.b->player_2, JOYPAD_BUTTON_START, !(action == GLFW_RELEASE));
             break;
             case GLFW_KEY_ESCAPE:
-                if(action == GLFW_PRESS) pause_game = !pause_game;
+                if(action == GLFW_PRESS && curr_screen == JES_GAME) pause_game = !pause_game;
             break;
         }
     }
@@ -435,6 +437,42 @@ uint8_t init_cpu(const char *path) {
     return 1;
 }
 
+uint8_t execute_instruction(frame *tile_frame) {
+    if(c.b->dma_stall > 0) { //If we need to stall the cpu because of a mass DMA transfer
+        c.b->dma_stall--;
+        ppu_tick(c.b->p, tile_frame);
+        ppu_tick(c.b->p, tile_frame);
+        ppu_tick(c.b->p, tile_frame);
+        c.b->total_cycles++;
+        return 1;
+    }
+
+    size_t cycles; //Number of cycles for this cpu instruction
+    //If an IRQ occurs
+    if(c.b->p->rom->irq_pending && !get_cpu_flag(&c, CPU_INTERRUPT_DISABLE)) {
+        cycles = 7;
+        interrupt_irq(&c);
+    }
+    //If an NMI occurs
+    else if(c.b->p->nmi_triggered) {
+        cycles = 7;
+        interrupt_nmi(&c);
+    }
+    //Run as normal
+    else {
+        cycles = execute_instr(&c);
+        // printf("0x02: %02X, 0x03: %02X\n", mem_read(c.b, (0x02)), mem_read(c.b, (0x03)));
+    }
+    //Tick up the ppu so they are synchronised
+    for(int i = 0; i < cycles; i++) {
+        ppu_tick(c.b->p, tile_frame);
+        ppu_tick(c.b->p, tile_frame);
+        ppu_tick(c.b->p, tile_frame);
+        c.b->total_cycles++;
+    }
+    return cycles;
+}
+
 int main(void) {
     if(init(&window)) {
         printf("Initialised\n");
@@ -465,6 +503,8 @@ int main(void) {
                         c.sp = 0xFF; //Setting stack pointer to top of stack
                         c.proc_stat_reg = 0x34; //Setting BREAK and UNUSED flags
                         set_pc(&c, 0xFFFC); //Resetting the pc
+                        pause_game = 0;
+                        game_playback = JES_PLAYBACK_NORMAL;
 
                         clay_update_dimensions(r, &mstate, dt, screen_width, screen_height);
                         Clay_RenderCommandArray renderCommands = clay_set_start_layout(dt);
@@ -484,54 +524,23 @@ int main(void) {
                             clay_render(r, bitmap, renderCommands, pb);
                         BOB_renderer_end(r);
 
-                        //Clear the backbuffer
-                        curr_frame = !curr_frame;
-                        memset(tile_frame[curr_frame].data, 0, FRAME_WIDTH * FRAME_HEIGHT *3);
-                        disassembly_buf_used = 0;
+                        if(!pause_game || game_playback == JES_PLAYBACK_FRAME) {
+                            //Clear the backbuffer
+                            curr_frame = !curr_frame;
+                            memset(tile_frame[curr_frame].data, 0, FRAME_WIDTH * FRAME_HEIGHT *3);
 
-                        //Run the CPU for this frame
-                        //Assume ratio of 1 CPU clock to 3 PPU clocks
-                        //Could add a master clock to make this more accurate
-                        size_t count = 0; //Number of cycles this frame
-                        while(count < CPU_CYCLES_PER_FRAME) {
-                            if(c.b->dma_stall > 0) { //If we need to stall the cpu because of a mass DMA transfer
-                                c.b->dma_stall--;
-                                ppu_tick(c.b->p, &tile_frame[curr_frame]);
-                                ppu_tick(c.b->p, &tile_frame[curr_frame]);
-                                ppu_tick(c.b->p, &tile_frame[curr_frame]);
-                                c.b->total_cycles++;
-                                count++;
-                                continue;
-                            }
-
-                            size_t cycles; //Number of cycles for this cpu instruction
-                            //If an IRQ occurs
-                            if(c.b->p->rom->irq_pending && !get_cpu_flag(&c, CPU_INTERRUPT_DISABLE)) {
-                                cycles = 7;
-                                interrupt_irq(&c);
-                            }
-                            //If an NMI occurs
-                            else if(c.b->p->nmi_triggered) {
-                                cycles = 7;
-                                interrupt_nmi(&c);
-                            }
-                            //Run as normal
-                            else {
-                                cycles = execute_instr(&c);
-                                // printf("0x02: %02X, 0x03: %02X\n", mem_read(c.b, (0x02)), mem_read(c.b, (0x03)));
-                            }
-                            //Tick up the ppu so they are synchronised
-                            for(int i = 0; i < cycles; i++) {
-                                ppu_tick(c.b->p, &tile_frame[curr_frame]);
-                                ppu_tick(c.b->p, &tile_frame[curr_frame]);
-                                ppu_tick(c.b->p, &tile_frame[curr_frame]);
-                                count++;
-                                c.b->total_cycles++;
-                            }
-                            if(count >= CPU_CYCLES_PER_FRAME - 32) {
-                                disassembly_buf_used += (size_t)append_disassembly_string(&c, &disassembly_buf[disassembly_buf_used]);
+                            //Run the CPU for this frame
+                            //Assume ratio of 1 CPU clock to 3 PPU clocks
+                            //Could add a master clock to make this more accurate
+                            size_t count = 0; //Number of cycles this frame
+                            while(count < CPU_CYCLES_PER_FRAME) {
+                                count += execute_instruction(&tile_frame[curr_frame]);
                             }
                         }
+                        else if(game_playback == JES_PLAYBACK_INSTR) {
+                            execute_instruction(&tile_frame[curr_frame]);
+                        }
+                        game_playback = JES_PLAYBACK_NORMAL;
                     }
                     break;
                     case JES_GAME: {
@@ -556,46 +565,13 @@ int main(void) {
                             //Clear the backbuffer
                             curr_frame = !curr_frame;
                             memset(tile_frame[curr_frame].data, 0, FRAME_WIDTH * FRAME_HEIGHT *3);
-                            disassembly_buf_used = 0;
 
                             //Run the CPU for this frame
                             //Assume ratio of 1 CPU clock to 3 PPU clocks
                             //Could add a master clock to make this more accurate
                             size_t count = 0; //Number of cycles this frame
                             while(count < CPU_CYCLES_PER_FRAME) {
-                                if(c.b->dma_stall > 0) { //If we need to stall the cpu because of a mass DMA transfer
-                                    c.b->dma_stall--;
-                                    ppu_tick(c.b->p, &tile_frame[curr_frame]);
-                                    ppu_tick(c.b->p, &tile_frame[curr_frame]);
-                                    ppu_tick(c.b->p, &tile_frame[curr_frame]);
-                                    c.b->total_cycles++;
-                                    count++;
-                                    continue;
-                                }
-
-                                size_t cycles; //Number of cycles for this cpu instruction
-                                //If an IRQ occurs
-                                if(c.b->p->rom->irq_pending && !get_cpu_flag(&c, CPU_INTERRUPT_DISABLE)) {
-                                    cycles = 7;
-                                    interrupt_irq(&c);
-                                }
-                                //If an NMI occurs
-                                else if(c.b->p->nmi_triggered) {
-                                    cycles = 7;
-                                    interrupt_nmi(&c);
-                                }
-                                //Run as normal
-                                else {
-                                    cycles = execute_instr(&c);
-                                }
-                                //Tick up the ppu so they are synchronised
-                                for(int i = 0; i < cycles; i++) {
-                                    ppu_tick(c.b->p, &tile_frame[curr_frame]);
-                                    ppu_tick(c.b->p, &tile_frame[curr_frame]);
-                                    ppu_tick(c.b->p, &tile_frame[curr_frame]);
-                                    count++;
-                                    c.b->total_cycles++;
-                                }
+                                count += execute_instruction(&tile_frame[curr_frame]);
                             }
                         }
                     }

@@ -4,6 +4,7 @@
 
 #include "../externals/bob.h"
 #include "../externals/clay.h"
+#include <stdint.h>
 
 typedef enum {
     JES_START,
@@ -17,8 +18,16 @@ typedef struct {
     uint8_t mouse_down;
 } mouse_state;
 
+typedef enum {
+    JES_PLAYBACK_NORMAL,
+    JES_PLAYBACK_INSTR,
+    JES_PLAYBACK_FRAME,
+} Game_Playback;
+
 extern BOB_Font_Handle bitmap;
 extern JES_Screen curr_screen;
+extern uint8_t pause_game;
+extern Game_Playback game_playback;
 
 void clay_init(BOB_Renderer_Handle r, size_t width, size_t height);
 void clay_update_dimensions(BOB_Renderer_Handle r, mouse_state *mstate, float dt, size_t width, size_t height);
