@@ -13,8 +13,7 @@
 #include "../externals/clay.h"
 
 
-//TODO: Make the disassembly printout work
-//      Add ability to step multiple frames/instr at a time (use a slider between 0 and 10 ig)
+//TODO: Add ability to step multiple frames/instr at a time (use a slider between 0 and 10 ig)
 //      Add ability to switch between different regions of memory for CPU/ROM/PPU(switch between 1st and second nametable)
 //      Add scrolling so things do not squish together when the screen is too small
 //      Make it look nice - Add labels to everything so its clear what different parts represent
@@ -74,10 +73,12 @@ void text_scroll_buffer_insert_line(TextScrollBuffer *buf, char *line, size_t li
     buf->line_ptr = (buf->line_ptr + 1) % (sizeof(buf->lines) / sizeof(buf->lines[0]));
     buf->lines_used++;
 }
-void text_scroll_buffer_draw(TextScrollBuffer *buf, size_t max_visible_lines, size_t font_sz) {
-    size_t num_lines = (max_visible_lines > buf->lines_used) ? buf->lines_used : max_visible_lines;
+void text_scroll_buffer_draw(TextScrollBuffer *buf, Clay_ElementId parentId, size_t font_sz) {
+    // Clay_ElementData parent_data = Clay_GetElementData(parentId);
+    // size_t max_visible_lines = (parent_data.boundingBox.height - 16) / font_sz;
 
-    for(size_t i = num_lines; i > 0; i--) {
+    // size_t num_lines = (max_visible_lines > buf->lines_used) ? buf->lines_used : max_visible_lines;
+    for(size_t i = 1; i <= buf->lines_used; i++) {
         uint8_t index = ((int32_t)buf->line_ptr - i) % (sizeof(buf->lines) / sizeof(buf->lines[0]));
         Clay_String str = (Clay_String){true, buf->lines[index].sz, buf->lines[index].line_start};
         CLAY_TEXT(str, {.textColor = COLOUR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_LEFT, .fontSize = font_sz});
@@ -320,9 +321,9 @@ void rom_page_component(rom *r, uint8_t memory_component, uint16_t page) {
     }
 }
 
-void disassembly_component(TextScrollBuffer *disassembly_buf) {
-    CLAY(CLAY_ID("DISASSEMBLY_DATA"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = CLAY_PADDING_ALL(8)}, .clip = {.vertical = true, .childOffset = Clay_GetScrollOffset()}, .backgroundColor = COLOUR_INK_BLACK}) {
-        text_scroll_buffer_draw(disassembly_buf, 32, 20);
+void disassembly_component(TextScrollBuffer *disassembly_buf, size_t parent_height) {
+    CLAY(CLAY_ID("DISASSEMBLY_DATA"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0, parent_height - 16)}, .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = CLAY_PADDING_ALL(8)}, .clip = {.vertical = true, .childOffset = Clay_GetScrollOffset()}, .backgroundColor = COLOUR_INK_BLACK}) {
+        text_scroll_buffer_draw(disassembly_buf, Clay_GetElementId(CLAY_STRING("DISASSEMBLY_DATA")), 20);
     }
 }
 
@@ -399,8 +400,10 @@ Clay_RenderCommandArray clay_set_debugger_layout(cpu *c, uint8_t *frame_data, fl
             CLAY(CLAY_ID("MainContent"), { .layout = { .layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = { .width = CLAY_SIZING_GROW(300), .height = CLAY_SIZING_GROW(0) },
                 .childGap = 8}}) {
                 CLAY(CLAY_ID("Top"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 8, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
-                    CLAY(CLAY_ID("Disassembly"), {.layout = {.sizing = {CLAY_SIZING_GROW(0, 220), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = COLOUR_VANILLA_CUSTARD}) {
-                        disassembly_component(disassembly_buf);
+                    CLAY(CLAY_ID("Disassembly"), {.layout = {.sizing = {CLAY_SIZING_GROW(0, 240), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = COLOUR_VANILLA_CUSTARD}) {
+                        Clay_ElementId did = Clay_GetElementId(CLAY_STRING("Disassembly"));
+                        Clay_ElementData data = Clay_GetElementData(did);
+                        disassembly_component(disassembly_buf, data.boundingBox.height);
                     }
                     CLAY(CLAY_ID("Game"), {.layout = {.sizing = {CLAY_SIZING_GROW(256, 512), CLAY_SIZING_GROW(240, 480)}}, .backgroundColor = COLOUR_VANILLA_CUSTARD}) {
                             Custom_Tex_Data *data = malloc(sizeof(Custom_Tex_Data));
@@ -501,7 +504,6 @@ void clay_render(BOB_Renderer_Handle r, BOB_Font_Handle bitmap, Clay_RenderComma
                 if(renderCommand->renderData.clip.vertical && renderCommand->renderData.clip.vertical) dir = BOB_CLIP_BOTH;
                 else if(renderCommand->renderData.clip.vertical) dir = BOB_CLIP_VERT;
                 else dir = BOB_CLIP_HORZ;
-                printf("Clip Quad: %f, %f, %f, %f\n", renderCommand->boundingBox.x, renderCommand->boundingBox.y, renderCommand->boundingBox.width, renderCommand->boundingBox.height);
                 BOB_start_clip(r, (BOB_Quad){renderCommand->boundingBox.x, renderCommand->boundingBox.y, renderCommand->boundingBox.width, renderCommand->boundingBox.height}, dir);
             }
             break;
