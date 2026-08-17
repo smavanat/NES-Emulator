@@ -177,7 +177,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 //    START     |    C     |    .
 //TODO: Make this configurable by the user
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
-    if(glfwGetWindowAttrib(window, GLFW_FOCUSED)) { //Only update user input when this window is the selected one
+    if(glfwGetWindowAttrib(window, GLFW_FOCUSED) && curr_screen != JES_START) { //Only update user input when this window is the selected one and not on the start screen
         switch(key) {
             case GLFW_KEY_W:
                 joypad_set_button_pressed(c.b->player_1, JOYPAD_BUTTON_UP, !(action == GLFW_RELEASE));
@@ -491,8 +491,9 @@ int main(void) {
             BOB_Pixelbuffer_Handle pb;
             BOB_pixelbuffer_init(r, FRAME_WIDTH, FRAME_HEIGHT, BOB_RGB, &pb);
 
-            char disassembly_buf[1024];
-            size_t disassembly_buf_used = 0;
+            TextScrollBuffer disassembly_buf = {0};
+            create_text_scroll_buffer(&disassembly_buf);
+            char str_buf[32];
 
             while(!glfwWindowShouldClose(window) && !c.stop) {
                 gettimeofday(&start, NULL); //Getting time at start of frame
@@ -517,7 +518,7 @@ int main(void) {
                     break;
                     case JES_DEBUGGER: {
                         clay_update_dimensions(r, &mstate, dt, screen_width, screen_height);
-                        Clay_RenderCommandArray renderCommands = clay_set_debugger_layout(&c, (uint8_t *)&tile_frame[curr_frame].data, dt, disassembly_buf, disassembly_buf_used);
+                        Clay_RenderCommandArray renderCommands = clay_set_debugger_layout(&c, (uint8_t *)&tile_frame[curr_frame].data, dt, &disassembly_buf);
 
                         //Clear the screen
                         BOB_renderer_begin(r, (float[4]){0.0f, 0.0f, 0.0f, 0.0f});
@@ -525,6 +526,9 @@ int main(void) {
                         BOB_renderer_end(r);
 
                         if(!pause_game || game_playback == JES_PLAYBACK_FRAME) {
+                            text_scroll_buffer_clear(&disassembly_buf);
+                            text_scroll_buffer_insert_line(&disassembly_buf, "UNAVAILABLE", 11);
+
                             //Clear the backbuffer
                             curr_frame = !curr_frame;
                             memset(tile_frame[curr_frame].data, 0, FRAME_WIDTH * FRAME_HEIGHT *3);
@@ -538,12 +542,15 @@ int main(void) {
                             }
                         }
                         else if(game_playback == JES_PLAYBACK_INSTR) {
+                            int len = append_disassembly_string(&c, str_buf);
+                            text_scroll_buffer_insert_line(&disassembly_buf, str_buf, len);
                             execute_instruction(&tile_frame[curr_frame]);
                         }
                         game_playback = JES_PLAYBACK_NORMAL;
                     }
                     break;
                     case JES_GAME: {
+                        //Clear the screen
                         BOB_renderer_begin(r, (float[4]){0.0f, 0.0f, 0.0f, 0.0f});
                             void *mapped_mem_ptr;
                             size_t mem_sz;
@@ -556,7 +563,6 @@ int main(void) {
                                 clay_update_dimensions(r, &mstate, dt, screen_width, screen_height);
                                 Clay_RenderCommandArray renderCommands = clay_set_game_layout(&c, (uint8_t *)&tile_frame[curr_frame].data, dt);
 
-                                //Clear the screen
                                 clay_render(r, bitmap, renderCommands, pb);
                             }
                         BOB_renderer_end(r);

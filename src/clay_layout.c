@@ -1,9 +1,11 @@
 //Implementation of helper functions and a layout in clay
 #include "clay_layout.h"
+#include <stddef.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
 #include "ppu.h"
 #include "cpu.h"
 
@@ -38,6 +40,50 @@ const Clay_Color COLOUR_RUSTY_SPICE = (Clay_Color){187, 62, 3, 255};
 const Clay_Color COLOUR_OXIDISED_IRON = (Clay_Color){174, 32, 18, 255};
 const Clay_Color COLOUR_BROWN_RED = (Clay_Color){155, 34, 38, 255};
 
+void create_text_scroll_buffer(TextScrollBuffer *buf) {
+    memset(buf->text_buf, 0, sizeof(buf->text_buf));
+    for(size_t i = 0; i < sizeof(buf->lines) / sizeof(buf->lines[0]); i++) {
+        buf->lines[i].line_start = buf->text_buf + (i * 20);
+        buf->lines[i].sz = 0;
+    }
+    buf->line_sz = 20;
+    buf->lines_used = 0;
+    buf->line_ptr = 0;
+}
+
+void text_scroll_buffer_clear(TextScrollBuffer *buf) {
+    memset(buf->text_buf, 0, sizeof(buf->text_buf));
+    buf->lines_used = 0;
+    buf->line_ptr = 0;
+    for(size_t i = 0; i < sizeof(buf->lines) / sizeof(buf->lines[0]); i++) {
+        buf->lines[i].sz = 0;
+    }
+}
+void text_scroll_buffer_insert_line(TextScrollBuffer *buf, char *line, size_t line_sz) {
+    if(line_sz > buf->line_sz) {
+        memcpy(buf->lines[buf->line_ptr].line_start, line, buf->line_sz);
+        buf->lines[buf->line_ptr].sz = buf->line_sz;
+        line_sz -= buf->line_sz;
+        line += buf->line_sz;
+        buf->line_ptr = (buf->line_ptr + 1) % 128;
+        buf->lines_used++;
+    }
+
+    memcpy(buf->lines[buf->line_ptr].line_start, line, line_sz);
+    buf->lines[buf->line_ptr].sz = line_sz;
+    buf->line_ptr = (buf->line_ptr + 1) % (sizeof(buf->lines) / sizeof(buf->lines[0]));
+    buf->lines_used++;
+}
+void text_scroll_buffer_draw(TextScrollBuffer *buf, size_t max_visible_lines, size_t font_sz) {
+    size_t num_lines = (max_visible_lines > buf->lines_used) ? buf->lines_used : max_visible_lines;
+
+    for(size_t i = num_lines; i > 0; i--) {
+        uint8_t index = ((int32_t)buf->line_ptr - i) % (sizeof(buf->lines) / sizeof(buf->lines[0]));
+        Clay_String str = (Clay_String){true, buf->lines[index].sz, buf->lines[index].line_start};
+        CLAY_TEXT(str, {.textColor = COLOUR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_LEFT, .fontSize = font_sz});
+    }
+}
+
 //TODO: unify all of the malloc calls in here into a global arena so that we don't keep allocating/freeing memory
 BOB_Pixelbuffer_Handle nametable_buffer;
 char *cpu_state_buf;
@@ -51,8 +97,7 @@ typedef enum {
     JES_BUTTON_SWITCH_TO_GAME,
     JES_BUTTON_SWITCH_TO_DEBUGGER,
     JES_BUTTON_SWITCH_TO_START,
-    JES_BUTTON_PAUSE,
-    JES_BUTTON_PLAY,
+    JES_BUTTON_PLAY_PAUSE,
     JES_BUTTON_STEP_FRAME,
     JES_BUTTON_STEP_INSTR,
     JES_BUTTON_OTHER,
@@ -84,8 +129,7 @@ void HandleButtonInteraction(Clay_ElementId elementId, Clay_PointerData pointerI
             case JES_BUTTON_SWITCH_TO_GAME: curr_screen = JES_GAME; break;
             case JES_BUTTON_SWITCH_TO_DEBUGGER: curr_screen = JES_DEBUGGER; break;
             case JES_BUTTON_SWITCH_TO_START: curr_screen = JES_START; break;
-            case JES_BUTTON_PAUSE: pause_game = 1; break;
-            case JES_BUTTON_PLAY: pause_game = 0; break;
+            case JES_BUTTON_PLAY_PAUSE: pause_game = !pause_game; break;
             case JES_BUTTON_STEP_FRAME: game_playback = JES_PLAYBACK_FRAME; break;
             case JES_BUTTON_STEP_INSTR: game_playback = JES_PLAYBACK_INSTR; break;
             default: break;
@@ -276,10 +320,9 @@ void rom_page_component(rom *r, uint8_t memory_component, uint16_t page) {
     }
 }
 
-void disassembly_component(char *buf, size_t buf_sz) {
-    Clay_String str = (Clay_String){true, buf_sz, buf};
-    CLAY(CLAY_ID("DISASSEMBLY_DATA"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}}, .clip = {.vertical = true, .childOffset = Clay_GetScrollOffset()}}) {
-        CLAY_TEXT(str, {.textColor = COLOUR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_LEFT, .fontSize = 17});
+void disassembly_component(TextScrollBuffer *disassembly_buf) {
+    CLAY(CLAY_ID("DISASSEMBLY_DATA"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = CLAY_PADDING_ALL(8)}, .clip = {.vertical = true, .childOffset = Clay_GetScrollOffset()}, .backgroundColor = COLOUR_INK_BLACK}) {
+        text_scroll_buffer_draw(disassembly_buf, 32, 20);
     }
 }
 
@@ -318,7 +361,7 @@ Clay_RenderCommandArray clay_set_start_layout(float dt) {
     // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
     Clay_BeginLayout();
 
-    CLAY(CLAY_ID("OuterContainer"), {.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 8, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}, .backgroundColor = {250, 250, 255, 255}}) {
+    CLAY(CLAY_ID("OuterContainer"), {.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 8, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}, .backgroundColor = COLOUR_DARK_CYAN}) {
         CLAY(CLAY_ID("Buttons"), {.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 16, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
             ButtonComponent(1, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 32, 40, 180, 40, CLAY_STRING("Play Game"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_GAME, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
             ButtonComponent(2, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 32, 40, 180, 40, CLAY_STRING("Open Debugger"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_DEBUGGER, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
@@ -328,16 +371,15 @@ Clay_RenderCommandArray clay_set_start_layout(float dt) {
     return Clay_EndLayout(dt); // deltaTime is the time since the last frame, and is used for transitions
 }
 
-Clay_RenderCommandArray clay_set_debugger_layout(cpu *c, uint8_t *frame_data, float dt, char *disassembly_buf, size_t disassembly_buf_sz) {
+Clay_RenderCommandArray clay_set_debugger_layout(cpu *c, uint8_t *frame_data, float dt, TextScrollBuffer *disassembly_buf) {
     // All clay layouts are declared between Clay_BeginLayout and Clay_EndLayout
     Clay_BeginLayout();
 
-    CLAY(CLAY_ID("OuterContainer"), { .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 8}, .backgroundColor = {250, 250, 255, 255}}) {
+    CLAY(CLAY_ID("OuterContainer"), { .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 8}, .backgroundColor = COLOUR_DARK_CYAN}) {
         CLAY(CLAY_ID("Buttons"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(32)}, .childGap = 16, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
             CLAY(CLAY_ID("ButtonContainer"), { .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 4, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
                 ButtonComponent(1, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 140, 40, 140, 40, CLAY_STRING("Main Menu"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_START, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
-                ButtonComponent(2, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 100, 40, 100, 40, CLAY_STRING("Pause"), HandleButtonInteraction, (void *)JES_BUTTON_PAUSE, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
-                ButtonComponent(3, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 100, 40, 100, 40, CLAY_STRING("Play"), HandleButtonInteraction, (void *)JES_BUTTON_PLAY, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+                ButtonComponent(3, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 100, 40, 100, 40, (pause_game) ? CLAY_STRING("Play") : CLAY_STRING("Pause"), HandleButtonInteraction, (void *)JES_BUTTON_PLAY_PAUSE, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
                 ButtonComponent(4, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 140, 40, 140, 40, CLAY_STRING("Step Frame"), HandleButtonInteraction, (void *)JES_BUTTON_STEP_FRAME, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
                 ButtonComponent(5, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 140, 40, 140, 40, CLAY_STRING("Step Instr"), HandleButtonInteraction, (void *)JES_BUTTON_STEP_INSTR, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
             }
@@ -357,8 +399,8 @@ Clay_RenderCommandArray clay_set_debugger_layout(cpu *c, uint8_t *frame_data, fl
             CLAY(CLAY_ID("MainContent"), { .layout = { .layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = { .width = CLAY_SIZING_GROW(300), .height = CLAY_SIZING_GROW(0) },
                 .childGap = 8}}) {
                 CLAY(CLAY_ID("Top"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 8, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
-                    CLAY(CLAY_ID("Disassembly"), {.layout = {.sizing = {CLAY_SIZING_GROW(0, 200), CLAY_SIZING_GROW(0)}}, .backgroundColor = COLOUR_VANILLA_CUSTARD}) {
-                        disassembly_component(disassembly_buf, disassembly_buf_sz);
+                    CLAY(CLAY_ID("Disassembly"), {.layout = {.sizing = {CLAY_SIZING_GROW(0, 220), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = COLOUR_VANILLA_CUSTARD}) {
+                        disassembly_component(disassembly_buf);
                     }
                     CLAY(CLAY_ID("Game"), {.layout = {.sizing = {CLAY_SIZING_GROW(256, 512), CLAY_SIZING_GROW(240, 480)}}, .backgroundColor = COLOUR_VANILLA_CUSTARD}) {
                             Custom_Tex_Data *data = malloc(sizeof(Custom_Tex_Data));
@@ -459,6 +501,7 @@ void clay_render(BOB_Renderer_Handle r, BOB_Font_Handle bitmap, Clay_RenderComma
                 if(renderCommand->renderData.clip.vertical && renderCommand->renderData.clip.vertical) dir = BOB_CLIP_BOTH;
                 else if(renderCommand->renderData.clip.vertical) dir = BOB_CLIP_VERT;
                 else dir = BOB_CLIP_HORZ;
+                printf("Clip Quad: %f, %f, %f, %f\n", renderCommand->boundingBox.x, renderCommand->boundingBox.y, renderCommand->boundingBox.width, renderCommand->boundingBox.height);
                 BOB_start_clip(r, (BOB_Quad){renderCommand->boundingBox.x, renderCommand->boundingBox.y, renderCommand->boundingBox.width, renderCommand->boundingBox.height}, dir);
             }
             break;
