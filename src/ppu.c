@@ -260,7 +260,6 @@ void sprite_palette(ppu *p, uint8_t palette_idx, uint8_t *colour) {
     colour[1] = p->palette_table[palette_start+1];
     colour[2] = p->palette_table[palette_start+2];
 }
-//Gets the data of every sprite that is rendererd on the current scanline
 void evaluate_sprites(ppu *p) {
     p->secondary_oam_count = 0;
     uint8_t sprite_height = get_ppu_ctrl_reg_flag(p, PPU_CR_SPRITE_SIZE) ? 16 : 8;
@@ -410,6 +409,14 @@ uint8_t ppu_tick(ppu *p, frame *fr) {
 
                 //0 means transparent for sprites
                 if(sprite_colour == 0) continue;
+
+                // Sprite zero hit is detected regardless of sprite priority.
+                // Both the sprite and background pixels must be opaque.
+                if (p->secondary_oam[i].oam_index == 0 &&
+                    sprite_colour != 0 &&
+                    colour != 0) {
+                    set_ppu_stat_reg_flag(p, PPU_STAT_SPRITE_ZERO_HIT, 1);
+                }
 
                 //Priority: If bit set, sprite is behind background (only draw over colour 0)
                 if(priority && colour != 0) continue;

@@ -13,11 +13,9 @@
 #include "../externals/clay.h"
 
 
-//TODO: Add ability to step multiple frames/instr at a time (use a slider between 0 and 10 ig)
-//      Add ability to switch between different regions of memory for CPU/ROM/PPU(switch between 1st and second nametable)
+//TODO: Add ability to switch between different regions of memory for CPU/ROM/PPU(switch between 1st and second nametable)
 //      Fix the change memory and change page buttons in the ROM section so the text doesn't come out of them when they are small
 //      Make it look nice - Add labels to everything so its clear what different parts represent
-//      Make it so that you can switch between stepping between frames and instructions
 //      Once APU done, add Debug for it on the other side of the Game (opposite to Disassembly)
 
 //Clay Colours to be reused
@@ -241,7 +239,7 @@ char *get_mirroring_as_string(mirroring m) {
 }
 
 void rom_state_component(rom *r) {
-    int len = sprintf(rom_state_buf, "PGR ROM Size: %zu\nCHR ROM Size: %zu\nPGR RAM Size: %zu\nCHR RAM Size: %zu\nPGR EEPROM Size: %zu\nMapper: %hu\nSubmapper: %hhu\nMirroring: %s\n",
+    int len = sprintf(rom_state_buf, "PRG ROM Size: %zu\nCHR ROM Size: %zu\nPRG RAM Size: %zu\nCHR RAM Size: %zu\nPRG EEPROM Size: %zu\nMapper: %hu\nSubmapper: %hhu\nMirroring: %s\n",
                       r->prg_rom_sz, r->chr_rom_sz, r->prg_ram_sz, r->chr_ram_sz, r->prg_eeprom_sz, r->mapper, r->submapper, get_mirroring_as_string(r->mirroring));
 
     if(r->num_mapper_registers > 0) {
@@ -376,9 +374,11 @@ Clay_RenderCommandArray clay_set_debugger_layout(cpu *c, uint8_t *frame_data, fl
         CLAY(CLAY_ID("Buttons"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(32)}, .childGap = 16, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
             CLAY(CLAY_ID("ButtonContainer"), { .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childGap = 4, .childAlignment = {.x = CLAY_ALIGN_X_CENTER}}}) {
                 ButtonComponent(1, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 140, 40, 140, 40, CLAY_STRING("Main Menu"), HandleButtonInteraction, (void *)JES_BUTTON_SWITCH_TO_START, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+                CLAY(CLAY_ID("LSeparator"), {.layout = {.sizing = {.width= CLAY_SIZING_GROW(0)}}}) {}
                 ButtonComponent(3, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 100, 40, 100, 40, (pause_game) ? CLAY_STRING("Play") : CLAY_STRING("Pause"), HandleButtonInteraction, (void *)JES_BUTTON_PLAY_PAUSE, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
                 ButtonComponent(4, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 140, 40, 140, 40, CLAY_STRING("Step Frame"), HandleButtonInteraction, (void *)JES_BUTTON_STEP_FRAME, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
                 ButtonComponent(5, COLOUR_OXIDISED_IRON, COLOUR_GOLDEN_ORANGE, 140, 40, 140, 40, CLAY_STRING("Step Instr"), HandleButtonInteraction, (void *)JES_BUTTON_STEP_INSTR, 10, CLAY_TEXT_ALIGN_CENTER, (Clay_ChildAlignment){.x = CLAY_ALIGN_X_CENTER});
+                CLAY(CLAY_ID("RSeparator"), {.layout = {.sizing = {.width= CLAY_SIZING_GROW(0)}}}) {}
             }
         }
         CLAY(CLAY_ID("Main_Content"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childGap = 8}}) {
@@ -479,7 +479,49 @@ void clay_render(BOB_Renderer_Handle r, BOB_Font_Handle bitmap, Clay_RenderComma
             break;
             // The renderer should draw a colored border inset into the bounding box.
             case CLAY_RENDER_COMMAND_TYPE_BORDER:
-                printf("Border Rendering not currently implemented\n");
+                BOB_draw_quad(r, (BOB_Quad){
+                    renderCommand->boundingBox.x,
+                    renderCommand->boundingBox.y,
+                    renderCommand->boundingBox.width,
+                    renderCommand->boundingBox.height,
+                }, (BOB_Vector4){
+                    renderCommand->renderData.rectangle.backgroundColor.r/255.0f,
+                    renderCommand->renderData.rectangle.backgroundColor.g/255.0f,
+                    renderCommand->renderData.rectangle.backgroundColor.b/255.0f,
+                    renderCommand->renderData.rectangle.backgroundColor.a/255.0f,
+                }, 10.0f, 0.0f);
+                BOB_draw_line(r, (BOB_Vector2){renderCommand->boundingBox.x, renderCommand->boundingBox.y}, (BOB_Vector2){renderCommand->boundingBox.x +
+                    renderCommand->boundingBox.width, renderCommand->boundingBox.y}, renderCommand->renderData.border.width.top,
+                    (BOB_Vector4){
+                        renderCommand->renderData.border.color.r/255.0f,
+                        renderCommand->renderData.border.color.b/255.0f,
+                        renderCommand->renderData.border.color.g/255.0f,
+                        renderCommand->renderData.border.color.a/255.0f,
+                    }, 11.0f);
+                BOB_draw_line(r, (BOB_Vector2){renderCommand->boundingBox.x, renderCommand->boundingBox.y}, (BOB_Vector2){renderCommand->boundingBox.x,
+                    renderCommand->boundingBox.y + renderCommand->boundingBox.height}, renderCommand->renderData.border.width.left,
+                    (BOB_Vector4){
+                        renderCommand->renderData.border.color.r/255.0f,
+                        renderCommand->renderData.border.color.b/255.0f,
+                        renderCommand->renderData.border.color.g/255.0f,
+                        renderCommand->renderData.border.color.a/255.0f,
+                    }, 11.0f);
+                BOB_draw_line(r, (BOB_Vector2){renderCommand->boundingBox.x + renderCommand->boundingBox.width, renderCommand->boundingBox.y},
+                    (BOB_Vector2){renderCommand->boundingBox.x + renderCommand->boundingBox.width, renderCommand->boundingBox.y + renderCommand->boundingBox.height},
+                    renderCommand->renderData.border.width.right, (BOB_Vector4){
+                        renderCommand->renderData.border.color.r/255.0f,
+                        renderCommand->renderData.border.color.b/255.0f,
+                        renderCommand->renderData.border.color.g/255.0f,
+                        renderCommand->renderData.border.color.a/255.0f,
+                    }, 11.0f);
+                BOB_draw_line(r, (BOB_Vector2){renderCommand->boundingBox.x, renderCommand->boundingBox.y + renderCommand->boundingBox.height},
+                    (BOB_Vector2){renderCommand->boundingBox.x + renderCommand->boundingBox.width, renderCommand->boundingBox.y + renderCommand->boundingBox.height},
+                    renderCommand->renderData.border.width.bottom, (BOB_Vector4){
+                        renderCommand->renderData.border.color.r/255.0f,
+                        renderCommand->renderData.border.color.b/255.0f,
+                        renderCommand->renderData.border.color.g/255.0f,
+                        renderCommand->renderData.border.color.a/255.0f,
+                    }, 11.0f);
             break;
             // The renderer should draw text.
             case CLAY_RENDER_COMMAND_TYPE_TEXT: {

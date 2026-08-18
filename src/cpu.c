@@ -442,7 +442,6 @@ uint16_t get_argument(cpu *c, address_mode mode, uint8_t get_val, size_t *cycles
             break;
     }
 
-
     return get_val ? mem_read(c->b, addr) : addr;
 }
 
