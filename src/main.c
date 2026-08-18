@@ -36,7 +36,7 @@ int screen_width = 800;
 int screen_height = 600;
 JES_Screen curr_screen = JES_START;
 
-uint8_t pause_game = 1;
+uint8_t pause_game = 0;
 
 Game_Playback game_playback = JES_PLAYBACK_NORMAL;
 
@@ -482,7 +482,7 @@ int main(void) {
         struct timeval stop, start; //Store the start and end times of a frame
         float dt = 0.0f; //Holds the time passed between frames
 
-        if(init_cpu("../roms/super_mario_bros.nes")) { //Loading the rom into memory
+        if(init_cpu("../roms/nestest.nes")) { //Loading the rom into memory
             printf("Loaded ROM\n");
 
             //Doubling buffering the screen
@@ -504,7 +504,7 @@ int main(void) {
                         c.sp = 0xFF; //Setting stack pointer to top of stack
                         c.proc_stat_reg = 0x34; //Setting BREAK and UNUSED flags
                         set_pc(&c, 0xFFFC); //Resetting the pc
-                        // pause_game = 0;
+                        pause_game = 0;
                         game_playback = JES_PLAYBACK_NORMAL;
 
                         clay_update_dimensions(r, &mstate, dt, screen_width, screen_height);
