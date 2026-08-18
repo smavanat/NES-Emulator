@@ -15,7 +15,7 @@
 
 //TODO: Add ability to step multiple frames/instr at a time (use a slider between 0 and 10 ig)
 //      Add ability to switch between different regions of memory for CPU/ROM/PPU(switch between 1st and second nametable)
-//      Add scrolling so things do not squish together when the screen is too small
+//      Fix the change memory and change page buttons in the ROM section so the text doesn't come out of them when they are small
 //      Make it look nice - Add labels to everything so its clear what different parts represent
 //      Make it so that you can switch between stepping between frames and instructions
 //      Once APU done, add Debug for it on the other side of the Game (opposite to Disassembly)
@@ -73,11 +73,7 @@ void text_scroll_buffer_insert_line(TextScrollBuffer *buf, char *line, size_t li
     buf->line_ptr = (buf->line_ptr + 1) % (sizeof(buf->lines) / sizeof(buf->lines[0]));
     buf->lines_used++;
 }
-void text_scroll_buffer_draw(TextScrollBuffer *buf, Clay_ElementId parentId, size_t font_sz) {
-    // Clay_ElementData parent_data = Clay_GetElementData(parentId);
-    // size_t max_visible_lines = (parent_data.boundingBox.height - 16) / font_sz;
-
-    // size_t num_lines = (max_visible_lines > buf->lines_used) ? buf->lines_used : max_visible_lines;
+void text_scroll_buffer_draw(TextScrollBuffer *buf, size_t font_sz) {
     for(size_t i = 1; i <= buf->lines_used; i++) {
         uint8_t index = ((int32_t)buf->line_ptr - i) % (sizeof(buf->lines) / sizeof(buf->lines[0]));
         Clay_String str = (Clay_String){true, buf->lines[index].sz, buf->lines[index].line_start};
@@ -146,7 +142,7 @@ void cpu_state_component(cpu *c) {
            get_cpu_flag(c, CPU_BREAK), get_cpu_flag(c, CPU_OVERFLOW), get_cpu_flag(c, CPU_NEGATIVE));
 
     Clay_String str = (Clay_String){true, len, cpu_state_buf};
-    CLAY(CLAY_ID("CPUSTATE"), {.layout = {.sizing = {CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = COLOUR_INK_BLACK}) {
+    CLAY(CLAY_ID("CPUSTATE"), {.layout = {.sizing = {CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = COLOUR_INK_BLACK, .clip = {.vertical = true, .horizontal = true, .childOffset = Clay_GetScrollOffset()}}) {
         CLAY_TEXT(str, {.textColor = COLOUR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_LEFT});
     }
 }
@@ -164,7 +160,7 @@ void cpu_page_component(cpu *c, uint8_t page_num) {
         len += sprintf(cpu_page_buf + len, "%02X ", mem_read(c->b, start_addr+i));
     }
     Clay_String str = (Clay_String){true, len, cpu_page_buf};
-    CLAY(CLAY_ID("CPUPAGE"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}}}) {
+    CLAY(CLAY_ID("CPUPAGE"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}}, .clip = {.vertical = true, .horizontal = true, .childOffset = Clay_GetScrollOffset()}}) {
         CLAY_TEXT(str, {.textColor = COLOUR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_LEFT, .fontSize = 17});
     }
 }
@@ -191,7 +187,7 @@ void ppu_state_component(ppu *p) {
                   get_scroll_register(p->scroll_reg), get_addr_register(p->addr_reg), p->data_reg, p->oamdma_reg);
 
     Clay_String str = (Clay_String){true, len, ppu_state_buf};
-    CLAY(CLAY_ID("PPUSTATE"), {.layout = {.sizing = {CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = COLOUR_INK_BLACK}) {
+    CLAY(CLAY_ID("PPUSTATE"), {.layout = {.sizing = {CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = COLOUR_INK_BLACK, .clip = {.vertical = true, .horizontal = true, .childOffset = Clay_GetScrollOffset()}}) {
         CLAY_TEXT(str, {.textColor = COLOUR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_LEFT});
     }
 }
@@ -257,7 +253,7 @@ void rom_state_component(rom *r) {
     }
 
     Clay_String str = (Clay_String){true, len, rom_state_buf};
-    CLAY(CLAY_ID("ROMSTATE"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = COLOUR_INK_BLACK}) {
+    CLAY(CLAY_ID("ROMSTATE"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = COLOUR_INK_BLACK, .clip = {.vertical = true, .horizontal = true, .childOffset = Clay_GetScrollOffset()}}) {
         CLAY_TEXT(str, {.textColor = COLOUR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_LEFT});
     }
 }
@@ -316,14 +312,14 @@ void rom_page_component(rom *r, uint8_t memory_component, uint16_t page) {
         len += sprintf(rom_page_buf + len, "%02X ", mem_region[start_addr+i]);
     }
     Clay_String str = (Clay_String){true, len, rom_page_buf};
-    CLAY(CLAY_ID("ROMPAGE"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}}}) {
+    CLAY(CLAY_ID("ROMPAGE"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}}, .clip = {.vertical = true, .horizontal = true, .childOffset = Clay_GetScrollOffset()}}) {
         CLAY_TEXT(str, {.textColor = COLOUR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_LEFT, .fontSize = 17});
     }
 }
 
 void disassembly_component(TextScrollBuffer *disassembly_buf, size_t parent_height) {
     CLAY(CLAY_ID("DISASSEMBLY_DATA"), {.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0, parent_height - 16)}, .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = CLAY_PADDING_ALL(8)}, .clip = {.vertical = true, .childOffset = Clay_GetScrollOffset()}, .backgroundColor = COLOUR_INK_BLACK}) {
-        text_scroll_buffer_draw(disassembly_buf, Clay_GetElementId(CLAY_STRING("DISASSEMBLY_DATA")), 20);
+        text_scroll_buffer_draw(disassembly_buf, 20);
     }
 }
 
